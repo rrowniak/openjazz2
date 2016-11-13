@@ -14,13 +14,7 @@ void GraphicsEngine::InitializeGfxMode(int width_, int height_)
 {
     width = width_;
     height = height_;
-    //auto screen_sdl = SDL_SetVideoMode(width, height, 32, SDL_SWSURFACE | SDL_DOUBLEBUF);
-//    auto screen_sdl = SDL_SetVideoMode(width, height, 32, SDL_HWSURFACE | SDL_DOUBLEBUF);
-    //auto screen_sdl = SDL_SetVideoMode(width, height, 32, SDL_HWSURFACE | SDL_DOUBLEBUF | SDL_FULLSCREEN);
-    
-//    SDL_CreateWindow()
-        
-//    SDL_CreateWindowAndRenderer(width, height, SDL_WINDOW_OPENGL, &sdlWindow, &sdlRenderer);
+
     sdlWindow = SDL_CreateWindow("OpenJazz2", 0, 0, width, height, SDL_WINDOW_OPENGL);
     
     auto s = new Surface();
