@@ -82,7 +82,7 @@ Level::~Level() { }
 
 void Level::Render(Surface &screen, const WorldTransformations& tr)
 {
-    //RenderLayers(screen, layers.size() - 1, 3, tr);
+    RenderLayers(screen, layers.size() - 1, 3, tr);
     RenderLayers(screen, 3, 3, tr);
 
     for (auto& ev: events)
@@ -125,24 +125,21 @@ Tile* Level::TileAt(int x, int y) const
 
 void Level::RenderLayers(Surface& screen, int from, int to, const WorldTransformations& tr)
 {
+    int X = tr.GetCameraPositionInUniverse().x;
+    int Y = tr.GetCameraPositionInUniverse().y;
+        
     for (int l = from; l >= to; --l)
     {
         auto& layer = layers[l];
 
-        int X = tr.GetCurrentPositionInUniverse().x;
-        int Y = tr.GetCurrentPositionInUniverse().y;
-
         if (world_height != layer.GetHeight() || world_width != layer.GetWidth())
         {
-            double scale_x = (double)X / world_width;
-            double scale_y = (double)Y / world_height;
-
-            X = ((double)layer.GetWidth() - (double)screen.getWidth()) * scale_x;
-            X = (X > 0)? X : 0;
-            Y = ((double)layer.GetHeight() - (double)screen.getHeight()) * scale_y;
-            Y = (Y > 0)? Y : 0;
+            const auto& tr_loc = tr.CreateNewWT(layer.GetWidth(), layer.GetHeight());
+            layer.Render(screen, tr_loc);
         }
-
-        layer.Render(screen, tr);
+        else
+        {
+            layer.Render(screen, tr);
+        }
     }
 }

@@ -37,7 +37,7 @@ Game::Game(const std::string& firstLev)
     transformer.SetUniverseSize(currentLevel->GetUniverseSize().w, currentLevel->GetUniverseSize().h);
     transformer.SetScreenSize(GraphicsEngine::getInstance().Screen().getWidth(),
                               GraphicsEngine::getInstance().Screen().getHeight());
-    transformer.SetCurrentPositionInUniverse(currentLevel->GetHeroStartPosition(), PositionAnchor::Centered);
+    transformer.SetCameraPositionInUniverse(currentLevel->GetHeroStartPosition(), PositionAnchor::Centered);
 }
 
 void Game::UpdateState(long)
@@ -91,22 +91,22 @@ void Game::Render(long /*currentTime*/)
 
 void Game::Up()
 {
-    transformer.MoveCurrentPositionInUniverse({0, -60});
+    transformer.MoveCameraPositionInUniverse({0, -60});
 }
 
 void Game::Down()
 {
-    transformer.MoveCurrentPositionInUniverse({0, 60});
+    transformer.MoveCameraPositionInUniverse({0, 60});
 }
 
 void Game::Left()
 {
-    transformer.MoveCurrentPositionInUniverse({-60, 0});
+    transformer.MoveCameraPositionInUniverse({-60, 0});
 }
 
 void Game::Right()
 {
-    transformer.MoveCurrentPositionInUniverse({60, 0});
+    transformer.MoveCameraPositionInUniverse({60, 0});
 }
 
 void Game::HeroJump()

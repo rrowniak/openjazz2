@@ -36,8 +36,8 @@ void Layer::Render(Surface &screen, const WorldTransformations& tr)
     {
         return;
     }
-    int layer_x = tr.GetCurrentPositionInUniverse(PositionAnchor::LeftTop).x;
-    int layer_y = tr.GetCurrentPositionInUniverse(PositionAnchor::LeftTop).y;
+    int layer_x = tr.GetCameraPositionInUniverse(PositionAnchor::LeftTop).x;
+    int layer_y = tr.GetCameraPositionInUniverse(PositionAnchor::LeftTop).y;
     std::vector<Point2D> points{
         {layer_x, layer_y},
         {layer_x, layer_y + screen.getHeight()},
@@ -46,7 +46,7 @@ void Layer::Render(Surface &screen, const WorldTransformations& tr)
     };
     typename std::remove_reference<decltype(tiles->GetEntitles(points[0]))>::type* entitles_set[4];
     int i = 0;
-    for (auto& p: points)
+    for (const auto& p: points)
     {
         entitles_set[i] = &tiles->GetEntitles(p);
         bool found_duplicate = false;

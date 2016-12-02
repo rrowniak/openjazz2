@@ -29,12 +29,20 @@ class WorldTransformations
 {
 public:
     void SetUniverseSize(unsigned int wWidth, unsigned int wHeight);
+    
     void SetScreenSize(unsigned int width, unsigned int height);
-    void SetCurrentPositionInUniverse(const Point2D& p, PositionAnchor a);
-    void MoveCurrentPositionInUniverse(const Vector2D& v);
+    
+    void SetCameraPositionInUniverse(const Point2D& p, PositionAnchor a);
+    
+    void MoveCameraPositionInUniverse(const Vector2D& v);
+    
     Point2D FromUniverseToScreen(const Point2D& posInUniverse) const;
-    const Point2D& GetCurrentPositionInUniverse() const { return positionInUniverse; }
-    const Point2D GetCurrentPositionInUniverse(PositionAnchor a) const;
+    
+    const Point2D& GetCameraPositionInUniverse() const { return positionInUniverse; }
+    
+    const Point2D GetCameraPositionInUniverse(PositionAnchor a) const;
+    
+    WorldTransformations CreateNewWT(unsigned int newUniverseWidth, unsigned int newUniverseHeight) const;
 private:
     unsigned int    universeWidth;
     unsigned int    universeHeight;

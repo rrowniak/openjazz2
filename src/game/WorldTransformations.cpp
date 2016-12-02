@@ -12,13 +12,13 @@ void WorldTransformations::SetScreenSize(unsigned int width, unsigned int height
     screenHeight = height;
 }
 
-void WorldTransformations::SetCurrentPositionInUniverse(const Point2D& p, PositionAnchor a)
+void WorldTransformations::SetCameraPositionInUniverse(const Point2D& p, PositionAnchor a)
 {
     positionInUniverse = p;
     anchor = a;
 }
 
-void WorldTransformations::MoveCurrentPositionInUniverse(const Vector2D& v)
+void WorldTransformations::MoveCameraPositionInUniverse(const Vector2D& v)
 {
     positionInUniverse.x += v.dx;
     positionInUniverse.y += v.dy;
@@ -26,21 +26,28 @@ void WorldTransformations::MoveCurrentPositionInUniverse(const Vector2D& v)
 
 Point2D WorldTransformations::FromUniverseToScreen(const Point2D& posInUniverse) const
 {
-    Point2D axis_origin = positionInUniverse;
-
-    if (anchor == PositionAnchor::Centered)
-    {
-        axis_origin.x -= screenWidth / 2;
-        axis_origin.y -= screenHeight / 2;
-    }
+    Point2D axis_origin = convertToLeftTop(positionInUniverse, anchor);
 
     return {posInUniverse.x - axis_origin.x, posInUniverse.y - axis_origin.y};
 }
 
-const Point2D WorldTransformations::GetCurrentPositionInUniverse(PositionAnchor a) const
+const Point2D WorldTransformations::GetCameraPositionInUniverse(PositionAnchor a) const
 {
     auto comm_p = convertToLeftTop(positionInUniverse, anchor);
     return convertFromLeftTop(comm_p, a);
+}
+
+WorldTransformations WorldTransformations::CreateNewWT(unsigned int newUniverseWidth, unsigned int newUniverseHeight) const
+{
+    WorldTransformations wt;
+    wt.SetUniverseSize(newUniverseWidth, newUniverseHeight);
+    wt.SetScreenSize(screenWidth, screenHeight);
+    
+    Point2D newCamPos = { int(wt.universeWidth * ((double)positionInUniverse.x / universeWidth)), 
+                          int(wt.universeHeight * ((double)positionInUniverse.y / universeHeight)) };
+    wt.SetCameraPositionInUniverse(newCamPos, anchor);
+    
+    return wt;
 }
 
 Point2D WorldTransformations::convertToLeftTop(const Point2D& p, PositionAnchor a) const
