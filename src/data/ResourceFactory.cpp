@@ -27,7 +27,7 @@ private:
     const Jazz2LevelFormat& LoadJJ2Level(const std::string& levelName);
 
     SurfaceSharedPtr LoadSurfaceInternal(const std::string& resourceName);
-    std::string     _path;
+    const std::string     _path;
 
     typedef std::map<std::string, SurfaceSharedPtr> SurfaceMap;
     SurfaceMap      _surfaces;

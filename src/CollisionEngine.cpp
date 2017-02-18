@@ -295,7 +295,7 @@ inline bool CheckForCollisionWithRect(const Point2D_d& p, Vector2D_t<double>& v,
             double d = SquareDistance(p, *i4);
             if (d < distance)
             {
-                distance = d;
+//                distance = d;
                 minDistance = i4;
             }
         }

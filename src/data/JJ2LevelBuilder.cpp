@@ -173,6 +173,7 @@ LevelEntities JJ2LevelBuilder::LoadEvents()
 EventPtr JJ2LevelBuilder::ConvertFromJJ2Event(const J2Event& jj2_ev) const
 {
     IEvent* ev = nullptr;
+    bool isFlipped = false;
 
     if ((jj2_ev.EventId < 33)
         || ((jj2_ev.EventId >= 206) && (jj2_ev.EventId <= 208))
@@ -183,12 +184,8 @@ EventPtr JJ2LevelBuilder::ConvertFromJJ2Event(const J2Event& jj2_ev) const
         auto* ev_ = new UnknownEvent;
         ev_->SetDisplayMessage((boost::format("id%1%") % (int)jj2_ev.EventId).str());
         ev = ev_;
-    }
-
-
-    bool isFlipped = false;
-
-    if (jj2_ev.EventId <= 40 && jj2_ev.EventId >= 33)
+    }    
+    else if (jj2_ev.EventId <= 40 && jj2_ev.EventId >= 33)
     {
         // Ammo
         auto* ev_ = new StandardEvent;

@@ -30,8 +30,8 @@ private:
 
 Game::Game(const std::string& firstLev)
     : camera(GraphicsEngine::getInstance().Width(), GraphicsEngine::getInstance().Height())
-{    
-    currentLevel = ResourceFactory::GetInstance().LoadLevel(firstLev);
+    , currentLevel(ResourceFactory::GetInstance().LoadLevel(firstLev))
+{
     hero.reset(new Hero(ResourceFactory::GetInstance().BuildHero()));
     hero->SetPosition(currentLevel->GetHeroStartPosition());
     transformer.SetUniverseSize(currentLevel->GetUniverseSize().w, currentLevel->GetUniverseSize().h);

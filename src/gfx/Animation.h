@@ -58,7 +58,7 @@ protected:
     std::vector<SurfaceSharedPtr>   _mirroredFrames;
     std::vector<AnimFrameInfo>      _framesInfo;
 
-    double _fps;
+    double _fps = 0;
     int _maxWidth = 0;
     int _maxHeight = 0;
 };

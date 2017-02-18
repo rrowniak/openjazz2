@@ -10,7 +10,7 @@ Animation::Animation(double fps)
 
 Animation::Animation(std::initializer_list<std::string> frames)
 {
-    for (auto& f: frames)
+    for (const auto& f: frames)
     {
         _frames.push_back({ResourceFactory::GetInstance().LoadSurface(f, 255, 0, 255)});
         _framesInfo.push_back({});
@@ -21,7 +21,7 @@ Animation::Animation(std::initializer_list<std::string> frames)
         _strategy.reset(new NormalAnimationStrategy(10, _frames.size()));
     }
 
-    for (auto& f: _frames)
+    for (const auto& f: _frames)
     {
         _maxWidth = std::max(f->getWidth(), _maxWidth);
         _maxHeight = std::max(f->getHeight(), _maxHeight);

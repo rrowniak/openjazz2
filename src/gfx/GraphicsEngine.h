@@ -25,8 +25,8 @@ private:
     std::unique_ptr<Surface>    screen;
     SDL_Window*                 sdlWindow = nullptr;
     SDL_Renderer*               sdlRenderer = nullptr;
-    int width;
-    int height;
+    int width = 0;
+    int height = 0;
 public:
     GraphicsEngine();
     ~GraphicsEngine();

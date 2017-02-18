@@ -125,9 +125,6 @@ Tile* Level::TileAt(int x, int y) const
 
 void Level::RenderLayers(Surface& screen, int from, int to, const WorldTransformations& tr)
 {
-    int X = tr.GetCameraPositionInUniverse().x;
-    int Y = tr.GetCameraPositionInUniverse().y;
-        
     for (int l = from; l >= to; --l)
     {
         auto& layer = layers[l];

@@ -33,10 +33,10 @@ public:
     int GetDY() const { return dy; }
 private:
     std::queue<PhysicsEvent> eventsToConsume;
-    int dx;
-    int dy;
-    IHorizCalc*     horizCalc;
-    IVertCalc*      vertCalc;
+    int dx = 0;
+    int dy = 0;
+    IHorizCalc*     horizCalc = nullptr;
+    IVertCalc*      vertCalc = nullptr;
     std::vector<std::unique_ptr<IHorizCalc>> horizCalcs;
     std::vector<std::unique_ptr<IVertCalc>> vertCalcs;
 };
