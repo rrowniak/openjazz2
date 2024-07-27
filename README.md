@@ -6,7 +6,9 @@ Developed in C++ 11/14, the project utilizes technologies like SDL 2.0, Boost, a
 
 ## Status
 
-The project is currently on hold but will be continued in the future. Right now, other projects take priority.
+~~The project is currently on hold but will be continued in the future. Right now, other projects take priority.~~
+
+The project will be continued using a prototype language called Kulfon. Get more about Kulfon [here](https://github.com/rrowniak/kulfon).
 
 ## Installation
 
