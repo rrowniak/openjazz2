@@ -32,10 +32,6 @@
     // Once all dependencies are fetched, `zig build` no longer requires
     // internet connectivity.
     .dependencies = .{
-        .sokol = .{
-            .url = "git+https://github.com/floooh/sokol-zig.git#76d4afd25adfae9666d76a0d324cdb70ad178a88",
-            .hash = "sokol-0.1.0-pb1HK3TYLgCx8lOxdLVWIVDcAzacxO8YDfyw2Er-_2nN",
-        },
     },
     .paths = .{
         "build.zig",

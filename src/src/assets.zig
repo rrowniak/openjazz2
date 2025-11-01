@@ -1,6 +1,5 @@
 const std = @import("std");
-const sokol = @import("sokol");
-const sg = sokol.gfx;
+const gfx = @import("gfx.zig");
 
 pub const TILE_SIZE: usize = 32;
 pub const BIT_MASK_SIZE = TILE_SIZE * TILE_SIZE / 8;
@@ -8,8 +7,7 @@ pub const BIT_MASK_SIZE = TILE_SIZE * TILE_SIZE / 8;
 pub const COLL_BIT_MASK = [BIT_MASK_SIZE]u8;
 
 pub const Tile = struct {
-    // pixels: [TILE_SIZE * TILE_SIZE]u8, // 8-bit indices
-    img: sg.Image,
+    sprite: gfx.Sprite,
     collision_bit_mask: COLL_BIT_MASK,
     flipped_collision_bit_mask: COLL_BIT_MASK,
 
@@ -43,24 +41,16 @@ pub const Tile = struct {
         @memcpy(t.collision_bit_mask[0..BIT_MASK_SIZE], coll_bit_mask[0..BIT_MASK_SIZE]);
         @memcpy(t.flipped_collision_bit_mask[0..BIT_MASK_SIZE], f_coll_bit_mask[0..BIT_MASK_SIZE]);
        
-        t.img = sg.makeImage(.{
-            .width = TILE_SIZE,
-            .height = TILE_SIZE,
-            .pixel_format = .RGBA8,
-            .data = .{
-                .mip_levels = .{
-                    .{
-                        .{ .ptr = rgba.ptr, .size = rgba.len },
-                    }
-                },
-            },
-        });
+        t.sprite = try gfx.create_sprite_from_rgba(rgba, TILE_SIZE, TILE_SIZE);
         return t;
+    }
+
+    pub fn deinit(self: Tile) void {
+        self.sprite.deinit();
     }
 };
 
 pub const Tileset = struct {
-    // palette: [256][3]u8,
     tiles: []Tile,
     alloc: std.mem.Allocator,
 

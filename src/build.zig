@@ -3,12 +3,7 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-
-    const dep_sokol = b.dependency("sokol", .{
-        .target = target,
-        .optimize = optimize,
-    });
-
+    
     const exe = b.addExecutable(.{
         .name = "openjazz2",
         .root_module = b.createModule(.{
@@ -16,10 +11,26 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
             .imports = &.{
-                .{ .name = "sokol", .module = dep_sokol.module("sokol") },
             },
         }),
     });
+    
+    // SDL3 integration
+    exe.linkSystemLibrary("sdl3");
+    
+    const pkg_config = b.addSystemCommand(&.{"pkg-config"});
+
+    pkg_config.addArgs(&.{
+        "pkg-config",
+        "--cflags",
+        "--libs",
+        "sdl3",
+    }); 
+    const out = pkg_config.captureStdOut(.{});
+    // Apply the flags found by pkg-config
+    exe.addIncludePath(out);
+    // needed by SDL3 - otherwise segfault
+    exe.linkLibC();
 
     b.installArtifact(exe);
 
