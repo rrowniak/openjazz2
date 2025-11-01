@@ -19,8 +19,8 @@ export fn init() void {
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
-    const a = assets_reader.load_tileset(gpa.allocator(), "/home/rr/Games/Jazz2/Jungle1.j2t") catch {std.debug.panic("asset {s}", .{"reader"});};
-    _ = a;
+    var a = assets_reader.load_tileset(gpa.allocator(), "/home/rr/Games/Jazz2/Jungle1.j2t") catch {std.debug.panic("asset {s}", .{"reader"});};
+    defer a.deinit();
     sg.setup(.{
         .environment = sglue.environment(),
         .logger = .{ .func = slog.func },
