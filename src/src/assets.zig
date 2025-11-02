@@ -23,9 +23,11 @@ pub const Tile = struct {
 
         for (indices, 0..) |idx, i| {
             const color = palette[idx];
-            rgba[i * 4 + 0] = @intCast(color & 0x000000FF);
-            rgba[i * 4 + 1] = @intCast(color & 0x0000FF00 >> 8);
-            rgba[i * 4 + 2] = @intCast(color & 0x00FF0000 >> 16);
+            const buf = rgba[i*4..];
+            std.mem.writeInt(u32, buf[0..4], color, .little);
+            // rgba[i * 4 + 0] = @intCast(color & 0x000000FF);
+            // rgba[i * 4 + 1] = @intCast(color & 0x0000FF00 >> 8);
+            // rgba[i * 4 + 2] = @intCast(color & 0x00FF0000 >> 16);
             rgba[i * 4 + 3] = 255;
         }
 
@@ -55,6 +57,9 @@ pub const Tileset = struct {
     alloc: std.mem.Allocator,
 
     pub fn deinit(self: *Tileset) void {
+        for (self.tiles) |t| {
+            t.deinit();
+        }
         self.alloc.free(self.tiles);
     }
 };

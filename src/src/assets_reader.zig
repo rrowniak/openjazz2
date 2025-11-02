@@ -189,6 +189,9 @@ pub fn load_tileset(allocator: std.mem.Allocator, path: []const u8) !assets.Tile
     defer info_s.deinit(allocator);
     var r = std.Io.Reader.fixed(info_blk);
     try readStructWithSlices(TilesetInfo, &info_s, &r);
+    // for (info_s.palette, 0..) |p, i| {
+    //     debug("Palette[{}] = {}", .{i, p});
+    // }
     // extract & process images
     var ret: assets.Tileset = .{
         .tiles = try allocator.alloc(assets.Tile, @intCast(info_s.tile_count)),
@@ -211,7 +214,8 @@ pub fn load_tileset(allocator: std.mem.Allocator, path: []const u8) !assets.Tile
             const img_size = 32 * 32;
             ret.tiles[i] = try .init_from_indexed(
                 allocator,
-                img_blk[image_off..image_off + img_size], &info_s.palette,
+                img_blk[image_off..image_off + img_size],
+                &info_s.palette,
                 mask_blk[mask_off..mask_off + assets.BIT_MASK_SIZE],
                 mask_blk[fmask_off..fmask_off + assets.BIT_MASK_SIZE],
             );

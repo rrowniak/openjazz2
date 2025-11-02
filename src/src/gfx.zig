@@ -6,6 +6,12 @@ const std = @import("std");
 var g_sdl_window: ?*sdl.SDL_Window = undefined;
 var g_sdl_renderer: ?*sdl.SDL_Renderer = undefined;
 var g_is_running = true;
+var g_screen_w: c_int = 1400;
+var g_screen_h: c_int = 800;
+
+pub fn screen_res() struct {w: usize, h: usize} {
+    return .{.w = @intCast(g_screen_w), .h = @intCast(g_screen_h)};
+}
 
 pub fn init() !void {
     // std.debug.print("Calling SDL_init...{s}\n", .{"x"});
@@ -18,7 +24,7 @@ pub fn init() !void {
 pub fn init_window() void {
      const r = sdl.SDL_CreateWindowAndRenderer(
         "OpenJazz", 
-        800, 600, 
+        g_screen_w, g_screen_h, 
         sdl.SDL_WINDOW_RESIZABLE,
         &g_sdl_window,
         &g_sdl_renderer
@@ -28,7 +34,7 @@ pub fn init_window() void {
     }
     _ = sdl.SDL_SetRenderLogicalPresentation(
         g_sdl_renderer, 
-        800, 600, 
+        g_screen_w, g_screen_h, 
         sdl.SDL_LOGICAL_PRESENTATION_LETTERBOX
     );
 }
@@ -49,10 +55,26 @@ pub fn update_frame() void {
     test_();
 }
 
+pub fn render() void {
+    _ = sdl.SDL_RenderPresent(g_sdl_renderer);
+}
+
 pub const Sprite = struct {
     texture: *sdl.SDL_Texture,
+    w: usize,
+    h: usize,
 
-    fn deinit(self: Sprite) void {
+    pub fn draw(self: Sprite, x: usize, y: usize) void {
+        const dst: sdl.SDL_FRect = .{
+            .x =  @floatFromInt(x),
+            .y = @floatFromInt(y),
+            .w = @floatFromInt(self.w),
+            .h = @floatFromInt(self.h),
+        };
+        _ = sdl.SDL_RenderTexture(g_sdl_renderer, self.texture, null, &dst);
+    }
+
+    pub fn deinit(self: Sprite) void {
         sdl.SDL_DestroyTexture(self.texture);
     }
 };
@@ -67,6 +89,8 @@ pub fn create_sprite_from_rgba(buf: []const u8, w: usize, h: usize) !Sprite {
     defer sdl.SDL_DestroySurface(surface);
     var r:  Sprite = undefined;
     r.texture = sdl.SDL_CreateTextureFromSurface(g_sdl_renderer, surface);
+    r.w = w;
+    r.h = h;
     return r;
 }
 
@@ -77,10 +101,7 @@ fn test_() void {
     const green: f32 = @floatCast(0.5 + 0.5 * sdl.SDL_sin(now + sdl.SDL_PI_D * 2 / 3));
     const blue: f32 = @floatCast(0.5 + 0.5 * sdl.SDL_sin(now + sdl.SDL_PI_D * 4 / 3));
     _ = sdl.SDL_SetRenderDrawColorFloat(g_sdl_renderer, red, green, blue, sdl.SDL_ALPHA_OPAQUE_FLOAT); 
-
     _ = sdl.SDL_RenderClear(g_sdl_renderer);
-
-    _ = sdl.SDL_RenderPresent(g_sdl_renderer);
 }
 
 pub fn deinit() void {
