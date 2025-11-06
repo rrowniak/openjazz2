@@ -25,7 +25,7 @@ pub fn init_window() void {
      const r = sdl.SDL_CreateWindowAndRenderer(
         "OpenJazz", 
         g_screen_w, g_screen_h, 
-        sdl.SDL_WINDOW_RESIZABLE,
+        sdl.SDL_WINDOW_RESIZABLE, // | sdl.SDL_WINDOW_OPENGL | sdl.SDL_WINDOW_TRANSPARENT,
         &g_sdl_window,
         &g_sdl_renderer
     );
@@ -37,6 +37,10 @@ pub fn init_window() void {
         g_screen_w, g_screen_h, 
         sdl.SDL_LOGICAL_PRESENTATION_LETTERBOX
     );
+
+    // if (!sdl.SDL_SetRenderDrawBlendMode(g_sdl_renderer, sdl.SDL_BLENDMODE_BLEND)) {
+    //     std.debug.print("{s} failed", .{"SetRenderDrawBlendMode"});
+    // }
 }
 
 pub fn is_running() bool {
@@ -51,8 +55,6 @@ pub fn update_frame() void {
             else => {},
         }
     }
-
-    test_();
 }
 
 pub fn render() void {
@@ -65,6 +67,7 @@ pub const Sprite = struct {
     h: usize,
 
     pub fn draw(self: Sprite, x: usize, y: usize) void {
+
         const dst: sdl.SDL_FRect = .{
             .x =  @floatFromInt(x),
             .y = @floatFromInt(y),
@@ -89,18 +92,26 @@ pub fn create_sprite_from_rgba(buf: []const u8, w: usize, h: usize) !Sprite {
     defer sdl.SDL_DestroySurface(surface);
     var r:  Sprite = undefined;
     r.texture = sdl.SDL_CreateTextureFromSurface(g_sdl_renderer, surface);
+//     r.texture = sdl.SDL_CreateTexture(
+//         g_sdl_renderer,
+//         sdl.SDL_PIXELFORMAT_RGBA32,
+//         sdl.SDL_TEXTUREACCESS_STATIC,
+//         @intCast(w), @intCast(h)
+// );
+    // _ = sdl.SDL_UpdateTexture(r.texture, null, surface.*.pixels, surface.*.pitch);
+    // _ = sdl.SDL_SetTextureBlendMode(r.texture, sdl.SDL_BLENDMODE_BLEND);
     r.w = w;
     r.h = h;
+
     return r;
 }
 
-fn test_() void {
-    const now_: f32 = @floatFromInt(sdl.SDL_GetTicks());
-    const now = now_ / 1000.0;
-    const red: f32 = @floatCast(0.5 + 0.5 * sdl.SDL_sin(now));
-    const green: f32 = @floatCast(0.5 + 0.5 * sdl.SDL_sin(now + sdl.SDL_PI_D * 2 / 3));
-    const blue: f32 = @floatCast(0.5 + 0.5 * sdl.SDL_sin(now + sdl.SDL_PI_D * 4 / 3));
-    _ = sdl.SDL_SetRenderDrawColorFloat(g_sdl_renderer, red, green, blue, sdl.SDL_ALPHA_OPAQUE_FLOAT); 
+pub fn get_ticks() f32 {
+    return @floatFromInt(sdl.SDL_GetTicks());
+}
+
+pub fn clean_screen(r: f32, g: f32, b: f32) void {
+    _ = sdl.SDL_SetRenderDrawColorFloat(g_sdl_renderer, r, g, b, sdl.SDL_ALPHA_OPAQUE_FLOAT); 
     _ = sdl.SDL_RenderClear(g_sdl_renderer);
 }
 

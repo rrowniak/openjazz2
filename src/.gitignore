@@ -1,0 +1,36 @@
+# Zig build artifacts
+zig-cache/
+.zig-cache/
+zig-out/
+
+# Build artifacts from `zig build`
+/build/
+
+# Editor / OS junk files
+.DS_Store
+Thumbs.db
+
+# IDE / editor settings
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test output or logs
+test-output/
+*.log
+
+# Temporary or generated files
+*.tmp
+*.bak
+
+# If you use CLion or other JetBrains tools
+cmake-build-*/
+
+# Optional: ignore local config files
+local.zig
+config.local.zig
+.typos.toml
+
+# test data
+test_data

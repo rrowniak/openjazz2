@@ -14,6 +14,19 @@ comptime {
     }
 }
 
+inline fn readPrim(comptime T: type, reader: anytype) !T {
+    var buf: [@sizeOf(T)]u8 = undefined;
+    const read = if (@TypeOf(reader) == *std.fs.File) 
+        try reader.read(&buf)
+    else if (@TypeOf(reader) == *std.Io.Reader)
+        try reader.readSliceShort(&buf)
+    else
+        @compileError("Unsupported reader type");
+    if (read != buf.len)
+        return error.EndOfStream;
+    return std.mem.bytesToValue(T, &buf);
+}
+
 /// Reads a binary representation of a struct `T` from the given `reader`.
 fn readStruct(comptime T: type, reader: anytype) !T {
     var result: T = undefined;
@@ -21,12 +34,7 @@ fn readStruct(comptime T: type, reader: anytype) !T {
     const fields = std.meta.fields(T);
     inline for (fields) |field| {
         const F = field.type;
-        var bytes: [@sizeOf(F)]u8 = undefined;
-        const read = try reader.read(&bytes);
-        if (read != bytes.len) {
-            return error.EndOfStream;
-        }
-        @field(result, field.name) = std.mem.bytesToValue(F, &bytes);
+        @field(result, field.name) = try readPrim(F, reader);
         if (@typeInfo(F) == .@"struct")
             @compileError("Member structs are not allowed: " ++ @typeName(F));
         // TODO: more restrictions like pointers, enums, errors, arrays with non-trivial types, etc.
@@ -51,12 +59,7 @@ fn readStructWithSlices(comptime T: type, v: *T, reader: anytype) !void {
             @memcpy(dst_as_bytes, reader.buffered()[0..member_bytes_len]);
             reader.toss(member_bytes_len);
         } else { // primitive types, static arrays
-            var bytes: [@sizeOf(F)]u8 = undefined;
-            const read = try reader.readSliceShort(&bytes);
-            if (read != bytes.len) {
-                return error.EndOfStream;
-            }
-            @field(v, field.name) = std.mem.bytesToValue(F, &bytes);
+            @field(v, field.name) = try readPrim(F, reader);
         }
         if (@typeInfo(F) == .@"struct")
             @compileError("Member structs are not allowed: " ++ @typeName(F));
@@ -151,7 +154,7 @@ const TilesetInfo = struct {
 };
 
 pub fn load_tileset(allocator: std.mem.Allocator, path: []const u8) !assets.Tileset {
-    info("Loading {s}", .{path});
+    info("Loading tileset {s}", .{path});
     var file = try std.fs.cwd().openFile(path, .{});
     defer file.close();
 
@@ -166,6 +169,7 @@ pub fn load_tileset(allocator: std.mem.Allocator, path: []const u8) !assets.Tile
         err("Incorrect file signature: expected 0xAFBEADDE, got {x}", .{header.signature} );
         return error.InvalidFormat;
     }
+    debug("Version: {x}", .{header.version});
     // read & decompress blocks 
     debug("Reading info block: cdata={}, udata={}", .{header.CData_info, header.UData_info});
     const info_blk = try decompress(allocator, &file, @intCast(header.CData_info), @intCast(header.UData_info));
@@ -189,12 +193,10 @@ pub fn load_tileset(allocator: std.mem.Allocator, path: []const u8) !assets.Tile
     defer info_s.deinit(allocator);
     var r = std.Io.Reader.fixed(info_blk);
     try readStructWithSlices(TilesetInfo, &info_s, &r);
-    // for (info_s.palette, 0..) |p, i| {
-    //     debug("Palette[{}] = {}", .{i, p});
-    // }
     // extract & process images
     var ret: assets.Tileset = .{
         .tiles = try allocator.alloc(assets.Tile, @intCast(info_s.tile_count)),
+        .version = header.version,
         .alloc = allocator,
     };
     for (0..@intCast(info_s.tile_count)) |i| {
@@ -202,6 +204,7 @@ pub fn load_tileset(allocator: std.mem.Allocator, path: []const u8) !assets.Tile
         const is_32bit_tile = info_s.img_offset[i] & Mask32bitTile != 0;
         const mask_off: usize = @intCast(info_s.mask_offset[i]);
         const fmask_off = info_s.flipped_mask_offset[i];
+        const alpha_off = info_s.alpha_offset[i];
 
         if (is_32bit_tile) {
             const img_size = 32 * 32 * 4;
@@ -210,18 +213,261 @@ pub fn load_tileset(allocator: std.mem.Allocator, path: []const u8) !assets.Tile
                 mask_blk[mask_off..mask_off + assets.BIT_MASK_SIZE],
                 mask_blk[fmask_off..fmask_off + assets.BIT_MASK_SIZE],
             );
-        } else {
+        } else { // indexed 8-bit
             const img_size = 32 * 32;
             ret.tiles[i] = try .init_from_indexed(
                 allocator,
                 img_blk[image_off..image_off + img_size],
                 &info_s.palette,
+                alpha_blk[alpha_off..alpha_off + assets.BIT_MASK_SIZE] ,
                 mask_blk[mask_off..mask_off + assets.BIT_MASK_SIZE],
                 mask_blk[fmask_off..fmask_off + assets.BIT_MASK_SIZE],
             );
         }
     }
     return ret;
+}
+
+const AnimlibHeader = struct {
+    magic: [4]u8, // "ALIB"
+    signature: u32, // 0x00BEBA00
+    header_size: u32,
+    version: u16,
+    unknown1: u16,
+    f_size: u32,
+    CRC32: u32,
+    count: i32,
+};
+
+const AnimBlockAddr = struct { addresses: []i32, };
+
+const AnimHeader = struct {
+    magic: [4]u8,      // "ANIM"
+    anim_count: u8,
+    sample_count: u8,  // number of samples in the set
+    frame_count: u16,
+    cumulative_sample_index: u32,
+    CData_info: i32,
+    UData_info: i32,
+    CData_frame: i32,
+    UData_frame: i32,
+    CData_image: i32,
+    UData_image: i32,
+    CData_sample: i32,
+    UData_sample: i32,
+};
+
+const AnimInfo = struct {
+    frame_count: u16,
+    frame_rate: u16,
+    unknown_1: u32,
+};
+
+const FrameInfo = struct {
+    width: i16,
+    height: i16,
+    coldspotX: i16, // Relative to hotspot
+    coldspotY: i16, // Relative to hotspot
+    hotspotX: i16,
+    hotspotY: i16,
+    gunspotX: i16, // Relative to hotspot
+    gunspotY: i16, // Relative to hotspot
+    image_address: i32,
+    mask_address: i32,
+};
+
+const Frame = struct {
+    width: u16,
+    height: u16,
+    draw_transparent: bool,
+    pixels: []u8,
+
+    fn init(allocator: std.mem.Allocator, reader: *std.Io.Reader, w: u16, h: u16) !Frame {
+        var frame: Frame = undefined;
+        frame.width = w;
+        frame.height = h;
+        frame.pixels = try allocator.alloc(u8, w * h);
+        @memset(frame.pixels[0..frame.pixels.len], 0);
+        const width = try readPrim(u16, reader);
+        _ = try readPrim(u16, reader);
+        frame.draw_transparent = (width & 0x8000) > 0;
+
+        var indx: usize = 0;
+        var last_op_empty = true;
+        while (indx < w * h) {
+            const op = try readPrim(u8, reader);
+            if (op < 0x80)  { // skip `op` pixels
+                indx += op; 
+            } else if (op == 0x80) { // skip to end of line
+                var left_in_line: usize = (w - (indx % w));
+                if ((indx % w == 0) and (!last_op_empty)) {
+                    left_in_line = 0;
+                }
+                indx += left_in_line;
+            } else { // op > 0x80 - copy `op & 127` pixels from stream
+                const to_read: usize = op & 0x7F;
+                try reader.readSliceAll(frame.pixels[indx..indx + to_read]);
+                indx += to_read;
+            }
+
+            last_op_empty = op == 0x80;
+        }
+        return frame;
+    }
+
+    fn deinit(self: Frame, allocator: std.mem.Allocator) void {
+        allocator.free(self.pixels);
+    }
+};
+
+const SampleHeader = struct {
+    total_size: i32,
+    magic_RIFF: u32,
+    chunk_size: i32,
+    format: u32, // "ASFF" for 1.20, "AS  " for 1.24
+    magic_SAMP: u32,
+    sample_size: u32,
+};
+
+const SampleDetails = struct {
+    sample_multiplier: u16,
+    unknown_1: u16,
+    pyload_size: u32,
+    unknown_2: [8]u8,
+    sample_rate: u32,
+};
+
+const SampleData = struct {
+    data: []u8,
+    unknown_1: u32,
+
+    fn init(allocator: std.mem.Allocator, size: usize) !SampleData {
+        return .{ .data = try allocator.alloc(u8, size), .unknown_1 = undefined};
+    }
+
+    fn deinit(self: SampleData, allocator: std.mem.Allocator) void {
+        allocator.free(self.data);
+    }
+};
+
+pub fn load_animlib(allocator: std.mem.Allocator, path: []const u8) !void {
+    info("Loading animlib {s}", .{path});
+    var file = try std.fs.cwd().openFile(path, .{});
+    defer file.close();
+
+    const header = try readStruct(AnimlibHeader, &file);
+    if (!std.mem.eql(u8, &header.magic, "ALIB")) {
+        err("Loading animlib {s} error: expected magic ALIB, got '{s}'", .{path, header.magic});
+        return error.InvalidFormat;
+    }
+    
+    if (header.signature != 0x00BEBA00) {
+        err("Incorrect file signature: expected 0x00BEBA00, got {x}", .{header.signature} );
+        return error.InvalidFormat;
+    }
+
+    var anim_blocks: AnimBlockAddr = .{ 
+        .addresses = try allocator.alloc(i32, @intCast(header.count)),
+    };
+    defer allocator.free(anim_blocks.addresses);
+   
+    _ = try file.read(std.mem.sliceAsBytes(anim_blocks.addresses));
+    for (anim_blocks.addresses, 0..) |a, i| {
+        // read set
+        try file.seekTo(@intCast(a));
+        const anim_header = try readStruct(AnimHeader, &file);
+
+        if (!std.mem.eql(u8, &anim_header.magic, "ANIM")) {
+            err("Loading animheader block #{d} error: expected magic ANIM, got '{s}'", .{i, anim_header.magic});
+            return error.InvalidFormat;
+        }
+        // read & decompress blocks 
+        // debug("Reading info block: cdata={}, udata={}", .{anim_header.CData_info, anim_header.UData_info});
+        const info_blk = try decompress(allocator, &file, @intCast(anim_header.CData_info), @intCast(anim_header.UData_info));
+        defer allocator.free(info_blk);
+
+        const frame_blk = try decompress(allocator, &file, @intCast(anim_header.CData_frame), @intCast(anim_header.UData_frame));
+        defer allocator.free(frame_blk);
+
+        const image_blk = try decompress(allocator, &file, @intCast(anim_header.CData_image), @intCast(anim_header.UData_image));
+        defer allocator.free(image_blk);
+
+        const sample_blk = try decompress(allocator, &file, @intCast(anim_header.CData_sample), @intCast(anim_header.UData_sample));
+        defer allocator.free(sample_blk);
+
+        var info_blk_reader = std.Io.Reader.fixed(info_blk);
+        var frame_blk_reader = std.Io.Reader.fixed(frame_blk);
+        for (0..anim_header.anim_count) |_| {
+            // read animation
+            var anim_info: AnimInfo = undefined;
+            try readStructWithSlices(AnimInfo, &anim_info, &info_blk_reader);
+            for (0..anim_info.frame_count) |_| {
+                // read frame
+                var frame_info: FrameInfo = undefined;
+                try readStructWithSlices(FrameInfo, &frame_info, &frame_blk_reader);
+                var r = std.Io.Reader.fixed(image_blk[@intCast(frame_info.image_address)..]);
+                var f = try Frame.init(
+                    allocator,
+                    &r,
+                    @intCast(frame_info.width), @intCast(frame_info.height)
+                );
+                f.deinit(allocator);
+            }
+        }
+    
+        var sample_blk_reader = std.Io.Reader.fixed(sample_blk);
+        for (0..anim_header.sample_count) |_| {
+            var sample_header: SampleHeader = undefined;
+            try readStructWithSlices(SampleHeader, &sample_header, &sample_blk_reader);
+
+            if (sample_header.format != 0x46465341 and sample_header.format != 0x20205341) {
+                err("Invalid sound format expected 0x46465341 or 0x20205341, got 0x{x}", .{sample_header.format});
+                return error.InvalidFormat;
+            }
+            if (sample_header.magic_RIFF != 0x46464952 or sample_header.magic_SAMP != 0x504D4153) {
+                err("Invalid sound format got: magic RIFF = 0x{x}, magic SAMP 0x{x}", .{sample_header.magic_RIFF, sample_header.magic_SAMP});
+                return error.InvalidFormat;
+            }
+
+            const is_asff = (sample_header.format == 0x46465341);
+
+            // padding or unknown data
+            var discard_bytes: usize = 40;
+            if (is_asff) discard_bytes = discard_bytes - 12;
+            sample_blk_reader.toss(discard_bytes);
+            
+            var sample_details: SampleDetails = undefined;
+            try readStructWithSlices(SampleDetails, &sample_details, &sample_blk_reader);
+
+            if (is_asff) {
+                sample_details.sample_multiplier = 0;
+            }
+            
+            // padding
+            const data_size = if (is_asff)
+                sample_header.chunk_size - 76 + 12 
+                else sample_header.chunk_size - 76 + 0;
+            // sample data
+            var sample_data: SampleData = try .init(allocator, @intCast(data_size));
+            defer sample_data.deinit(allocator);
+            try readStructWithSlices(SampleData, &sample_data, &sample_blk_reader);
+            // padding
+            if (sample_header.total_size > sample_header.chunk_size + 12) {
+                sample_blk_reader.toss(
+                    @intCast(sample_header.total_size - sample_header.chunk_size - 12)
+                );
+            }
+        }
+    }
+}
+
+const TEST_DATA_TILES = "test_data1/v123";
+// const TEST_DATA_TILES = "test_data1/v888";
+const TEST_DATA_ANIMS = "test_data1/v123";
+// test utility functions
+comptime {
+    if (@import("builtin").is_test) {
+    }
 }
 
 test "struct from memory" {
@@ -266,9 +512,63 @@ test "struct from memory" {
 }
 
 test "Loading tileset" {
+    const gfx = @import("gfx.zig");
+    try gfx.init();
+    gfx.init_window(); 
+    defer gfx.deinit();
+
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     var a = try load_tileset(gpa.allocator(), "/home/rr/Games/Jazz2/Jungle1.j2t");
     defer a.deinit();
-    // try expect(false);
+}
+
+test "Loading anims" {
+    const gfx = @import("gfx.zig");
+    try gfx.init();
+    gfx.init_window(); 
+    defer gfx.deinit();
+
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    try load_animlib(gpa.allocator(), "/home/rr/Games/Jazz2/Anims.j2a");
+}
+
+
+test "Load all .j2t tilesets from TEST_DATA_TILES "  {
+    const allocator = std.testing.allocator;
+    const dir_path = TEST_DATA_TILES;
+    const gfx = @import("gfx.zig");
+    try gfx.init();
+    gfx.init_window();
+    defer gfx.deinit();
+
+    // Try opening the directory
+    var dir = std.fs.cwd().openDir(dir_path, .{ .iterate = true }) catch |d_err| {
+        if (d_err == error.FileNotFound) {
+            std.debug.print("Skipping test: directory '{s}' not found.\n", .{dir_path});
+            return; // gracefully skip test if folder missing
+        }
+        return d_err; // fail for other errors
+    };
+    defer dir.close();
+
+    var it = dir.iterate();
+    while (try it.next()) |entry| {
+        // We only want regular files with .j2t extension
+        if (entry.kind != .file) continue;
+        if (!std.mem.endsWith(u8, entry.name, ".j2t")
+            and !std.mem.endsWith(u8, entry.name, ".J2T")) 
+            continue;
+
+        // Build the full path (dir_path + "/" + entry.name)
+        const full_path = try std.fs.path.join(allocator, &.{ dir_path, entry.name });
+        defer allocator.free(full_path);
+        // std.debug.print("Loading {s}..", .{full_path});
+        // Call your function — expect it not to fail
+        var t = try load_tileset(allocator, full_path);
+        defer t.deinit();
+
+        try expect(t.version == 0x200 or t.version == 0x201);
+    }
 }
