@@ -12,6 +12,59 @@ pub const JJ2Version = enum(u16) {
     All = 0xffff,
 };
 
+// Global palettes
+//
+pub const Palette = [256]u32;
+
+pub const LevelPalette = enum {
+    red_gem,
+    green_gem,
+    blue_gem,
+    purple_gem,
+};
+
+var red_gem_palette: Palette = undefined;
+var green_gem_palette: Palette = undefined;
+var blue_gem_palette: Palette = undefined;
+var purple_gem_palette: Palette = undefined;
+var cached = false;
+
+inline fn to_rgba(r: u8, g: u8, b: u8, a: u8) u32 {
+    const aa: u32 = a; const rr: u32 = r; const gg: u32 = g; const bb: u32 = b;
+    return (aa << 24) | (bb << 16) | (gg << 8) | rr;
+}
+
+fn map_palette(palette: *Palette, factor: u32) void {
+    for (128..240) |i| {
+        const count = i - 128;
+        const color: u8 = @as(u8, @intFromFloat(200.0 * @as(f64, @floatFromInt(count)) / 128.0)) + 55;
+        const color_r = color & ((factor >> 16) & 0xff);
+        const color_g = color & ((factor >> 8) & 0xff);
+        const color_b = color & (factor & 0xff);
+        palette[i] = to_rgba(@intCast(color_r), @intCast(color_g), @intCast(color_b), 255);
+    }
+    for (240..256) |i| {
+        palette[i] = to_rgba(255, 255, 255, 255);
+    }
+}
+
+pub fn generate_palette(pal: LevelPalette) *Palette {
+    if (!cached) {
+        map_palette(&red_gem_palette, 0xff0000);
+        map_palette(&green_gem_palette, 0x00ff00);
+        map_palette(&blue_gem_palette, 0x0000ff);
+        map_palette(&purple_gem_palette, 0xff00ff);
+        cached = true;
+    }
+    return switch (pal) {
+        .red_gem => &red_gem_palette,
+        .green_gem => &green_gem_palette,
+        .blue_gem => &blue_gem_palette,
+        .purple_gem => &purple_gem_palette,
+    };
+}
+// Tilesets and sprites
+//
 pub const TILE_SIZE: usize = 32;
 pub const BIT_MASK_SIZE = TILE_SIZE * TILE_SIZE / 8;
 // collision bit mask type
@@ -60,7 +113,7 @@ pub const Tile = struct {
         @memcpy(t.collision_bit_mask[0..BIT_MASK_SIZE], coll_bit_mask[0..BIT_MASK_SIZE]);
         @memcpy(t.flipped_collision_bit_mask[0..BIT_MASK_SIZE], f_coll_bit_mask[0..BIT_MASK_SIZE]);
        
-        t.sprite = try gfx.create_sprite_from_rgba(rgba, TILE_SIZE, TILE_SIZE);
+        t.sprite = try gfx.Sprite.init_from_rgba(rgba, TILE_SIZE, TILE_SIZE);
         return t;
     }
 
@@ -72,6 +125,7 @@ pub const Tile = struct {
 pub const Tileset = struct {
     tiles: []Tile,
     version: u16,
+    palette: Palette,
     alloc: std.mem.Allocator,
 
     pub fn deinit(self: *Tileset) void {
@@ -81,8 +135,11 @@ pub const Tileset = struct {
         self.alloc.free(self.tiles);
     }
 };
+
+// Animations and samples
+//
 pub const Frame = struct {
-    sprite: gfx.Sprite,
+    sprite: gfx.IndexedSprite,
     width: i16,
     height: i16,
     coldspotX: i16, // Relative to hotspot, collision point?
@@ -92,23 +149,42 @@ pub const Frame = struct {
     gunspotX: i16, // Relative to hotspot, gun attached?
     gunspotY: i16, // Relative to hotspot
 };
+
 pub const Anim = struct {
     frame_rate: u16,
     frames: []Frame,
 };
+
 pub const Sample = struct {
     sample_rate: u32,
     multiplier: u16,
     data: []u8,
 };
 
-pub const Animset = struct {
+pub const AnimBlock = struct {
     anims: []Anim,
     samples: []Sample,
+};
+
+pub const Animset = struct {
+    blocks: []AnimBlock,
     alloc: std.mem.Allocator,
 
     pub fn deinit(self: *Animset) void {
-        self.alloc.free(self.anims);
-        self.alloc.free(self.samples);
+        for (self.blocks) |b| {
+            for (b.anims) |a| {
+                for (a.frames) |f| {
+                    f.sprite.deinit(self.alloc);
+                }
+                self.alloc.free(a.frames);
+            }
+            self.alloc.free(b.anims);
+
+            for (b.samples) |s| {
+                self.alloc.free(s.data);
+            }
+            self.alloc.free(b.samples);
+        }
+        self.alloc.free(self.blocks);
     }
 };

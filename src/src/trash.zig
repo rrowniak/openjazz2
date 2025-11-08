@@ -38,5 +38,25 @@ pub fn readStruct2(comptime T: type, reader: anytype) !T {
 
     return result;
 }
-const foo = struct {f: u8,};
 
+pub fn paletteToString(allocator: std.mem.Allocator, palette: [256]u32) ![]u8 {
+    var list: std.ArrayList(u8) = try .initCapacity(allocator, 1024);
+    defer list.deinit(allocator);
+
+    try list.appendSlice(allocator, "{ ");
+
+    for (palette, 0..) |color, i| {
+        // Write e.g. "0x00FFAABB"
+        //try std.fmt.format(list.writer(), "0x{08X}", .{color});
+        const s = try std.fmt.allocPrint(allocator, "0x{X}", .{color});
+        defer allocator.free(s);
+        try list.appendSlice(allocator, s);
+
+        if (i != palette.len - 1)
+            try list.appendSlice(allocator, ", ");
+    }
+
+    try list.appendSlice(allocator, " }");
+
+    return list.toOwnedSlice(allocator);
+}

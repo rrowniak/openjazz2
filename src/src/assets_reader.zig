@@ -197,8 +197,13 @@ pub fn load_tileset(allocator: std.mem.Allocator, path: []const u8) !assets.Tile
     var ret: assets.Tileset = .{
         .tiles = try allocator.alloc(assets.Tile, @intCast(info_s.tile_count)),
         .version = header.version,
+        .palette = info_s.palette,
         .alloc = allocator,
     };
+    // const s = try @import("trash.zig").paletteToString(allocator, info_s.palette);
+    // defer allocator.free(s);
+    // std.log.debug("Palette: {s}", .{s});
+
     for (0..@intCast(info_s.tile_count)) |i| {
         const image_off = info_s.img_offset[i] & ~Mask32bitTile;
         const is_32bit_tile = info_s.img_offset[i] & Mask32bitTile != 0;
@@ -350,8 +355,8 @@ const SampleData = struct {
     }
 };
 
-pub fn load_animlib(allocator: std.mem.Allocator, path: []const u8) !void {
-    info("Loading animlib {s}", .{path});
+pub fn load_animset(allocator: std.mem.Allocator, path: []const u8) !assets.Animset {
+    info("Loading animset {s}", .{path});
     var file = try std.fs.cwd().openFile(path, .{});
     defer file.close();
 
@@ -370,6 +375,11 @@ pub fn load_animlib(allocator: std.mem.Allocator, path: []const u8) !void {
         .addresses = try allocator.alloc(i32, @intCast(header.count)),
     };
     defer allocator.free(anim_blocks.addresses);
+
+    var ret: assets.Animset = .{
+        .blocks = try allocator.alloc(assets.AnimBlock, @intCast(header.count)),
+        .alloc = allocator,
+    };
    
     _ = try file.read(std.mem.sliceAsBytes(anim_blocks.addresses));
     for (anim_blocks.addresses, 0..) |a, i| {
@@ -397,11 +407,15 @@ pub fn load_animlib(allocator: std.mem.Allocator, path: []const u8) !void {
 
         var info_blk_reader = std.Io.Reader.fixed(info_blk);
         var frame_blk_reader = std.Io.Reader.fixed(frame_blk);
-        for (0..anim_header.anim_count) |_| {
+
+        ret.blocks[i].anims = try allocator.alloc(assets.Anim, @intCast(anim_header.anim_count));
+        for (0..anim_header.anim_count) |j| {
             // read animation
             var anim_info: AnimInfo = undefined;
             try readStructWithSlices(AnimInfo, &anim_info, &info_blk_reader);
-            for (0..anim_info.frame_count) |_| {
+            ret.blocks[i].anims[j].frame_rate = anim_info.frame_rate;
+            ret.blocks[i].anims[j].frames = try allocator.alloc(assets.Frame, anim_info.frame_count);
+            for (0..anim_info.frame_count) |k| {
                 // read frame
                 var frame_info: FrameInfo = undefined;
                 try readStructWithSlices(FrameInfo, &frame_info, &frame_blk_reader);
@@ -411,12 +425,26 @@ pub fn load_animlib(allocator: std.mem.Allocator, path: []const u8) !void {
                     &r,
                     @intCast(frame_info.width), @intCast(frame_info.height)
                 );
-                f.deinit(allocator);
+                defer f.deinit(allocator);
+                
+                const f_ptr = &ret.blocks[i].anims[j].frames[k];
+                f_ptr.height = frame_info.height;
+                f_ptr.width = frame_info.width;
+                f_ptr.coldspotX = frame_info.coldspotX;
+                f_ptr.coldspotY = frame_info.coldspotY;
+                f_ptr.hotspotX = frame_info.hotspotX;
+                f_ptr.hotspotY = frame_info.hotspotY;
+                f_ptr.gunspotX = frame_info.gunspotX;
+                f_ptr.gunspotY = frame_info.gunspotY;
+                f_ptr.sprite = try .init(allocator, @intCast(f_ptr.width), @intCast(f_ptr.height), f.pixels);
             }
         }
     
         var sample_blk_reader = std.Io.Reader.fixed(sample_blk);
-        for (0..anim_header.sample_count) |_| {
+
+        ret.blocks[i].samples = try allocator.alloc(assets.Sample, @intCast(anim_header.sample_count));
+
+        for (0..anim_header.sample_count) |j| {
             var sample_header: SampleHeader = undefined;
             try readStructWithSlices(SampleHeader, &sample_header, &sample_blk_reader);
 
@@ -442,6 +470,9 @@ pub fn load_animlib(allocator: std.mem.Allocator, path: []const u8) !void {
             if (is_asff) {
                 sample_details.sample_multiplier = 0;
             }
+
+            ret.blocks[i].samples[j].sample_rate = sample_details.sample_rate;
+            ret.blocks[i].samples[j].multiplier = sample_details.sample_multiplier;
             
             // padding
             const data_size = if (is_asff)
@@ -449,8 +480,10 @@ pub fn load_animlib(allocator: std.mem.Allocator, path: []const u8) !void {
                 else sample_header.chunk_size - 76 + 0;
             // sample data
             var sample_data: SampleData = try .init(allocator, @intCast(data_size));
-            defer sample_data.deinit(allocator);
+            // defer sample_data.deinit(allocator);
+            // don't defer, just reassing to the destination structure
             try readStructWithSlices(SampleData, &sample_data, &sample_blk_reader);
+            ret.blocks[i].samples[j].data = sample_data.data;
             // padding
             if (sample_header.total_size > sample_header.chunk_size + 12) {
                 sample_blk_reader.toss(
@@ -459,6 +492,8 @@ pub fn load_animlib(allocator: std.mem.Allocator, path: []const u8) !void {
             }
         }
     }
+
+    return ret;
 }
 
 const TEST_DATA_TILES = "test_data1/v123";
@@ -531,7 +566,7 @@ test "Loading anims" {
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
-    try load_animlib(gpa.allocator(), "/home/rr/Games/Jazz2/Anims.j2a");
+    try load_animset(gpa.allocator(), "/home/rr/Games/Jazz2/Anims.j2a");
 }
 
 
