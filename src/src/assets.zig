@@ -188,3 +188,13 @@ pub const Animset = struct {
         self.alloc.free(self.blocks);
     }
 };
+
+// Level
+// 
+pub const Level = struct {
+    alloc: std.mem.Allocator,
+
+    pub fn deinit(self: *Level) void {
+        _ = self;
+    }
+};

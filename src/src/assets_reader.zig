@@ -1,4 +1,5 @@
 const assets = @import("assets.zig");
+const easy_bit = @import("easy_bit.zig");
 const std = @import("std");
 const info = std.log.info;
 const err = std.log.err;
@@ -16,6 +17,13 @@ comptime {
 
 inline fn readPrim(comptime T: type, reader: anytype) !T {
     var buf: [@sizeOf(T)]u8 = undefined;
+
+    // if (@TypeOf(reader) == *std.fs.File) {
+    //     _ = try reader.read(&buf);
+    //     var r = std.Io.Reader.fixed(&buf);
+    //     return try easy_bit.read(T, &r);
+    // }
+
     const read = if (@TypeOf(reader) == *std.fs.File) 
         try reader.read(&buf)
     else if (@TypeOf(reader) == *std.Io.Reader)
@@ -28,18 +36,34 @@ inline fn readPrim(comptime T: type, reader: anytype) !T {
 }
 
 /// Reads a binary representation of a struct `T` from the given `reader`.
-fn readStruct(comptime T: type, reader: anytype) !T {
-    var result: T = undefined;
+fn readStruct(comptime T: type, file: *std.fs.File) !T {
+    // var result: T = undefined;
+    //
+    // const fields = std.meta.fields(T);
+    // inline for (fields) |field| {
+    //     const F = field.type;
+    //     @field(result, field.name) = try readPrim(F, file);
+    //     if (@typeInfo(F) == .@"struct")
+    //         @compileError("Member structs are not allowed: " ++ @typeName(F));
+    //     // TODO: more restrictions like pointers, enums, errors, arrays with non-trivial types, etc.
+    // }
+    // return result;
 
-    const fields = std.meta.fields(T);
-    inline for (fields) |field| {
-        const F = field.type;
-        @field(result, field.name) = try readPrim(F, reader);
-        if (@typeInfo(F) == .@"struct")
-            @compileError("Member structs are not allowed: " ++ @typeName(F));
-        // TODO: more restrictions like pointers, enums, errors, arrays with non-trivial types, etc.
-    }
-    return result;
+    // var buff: [@bitSizeOf(T)/8]u8 = undefined;
+    // var buff: [easy_bit.size_of(T)]u8 = undefined;
+    // // var reader = file.reader(&buff);
+    // var reader = file.readerStreaming(&buff);
+    // // try reader.seekTo(try file.getPos());
+    // return try easy_bit.read(T, &reader.interface);
+
+    // var buff: [easy_bit.size_of(T)]u8 = undefined;
+    // const r = try file.read(&buff);
+    // if (r != buff.len) {
+    //     return error.EndOfStream;
+    // }
+    // var reader = std.Io.Reader.fixed(&buff);
+    // return try easy_bit.read(T, &reader);
+    return try easy_bit.fread(T, file);
 }
 
 /// Reads a binary representation of a struct `T` from the given `reader`.
@@ -92,7 +116,8 @@ fn decompress(allocator: std.mem.Allocator, file: anytype, c_size: usize, u_size
 }
 
 const TilesetHeader = struct {
-    copyright: [180]u8,
+    // copyright: [180]u8,
+    copyright: easy_bit.marker_skip_n(180),
     magic: [4]u8,            // "TILE"
     signature: u32,
     title: [32]u8,
@@ -496,6 +521,130 @@ pub fn load_animset(allocator: std.mem.Allocator, path: []const u8) !assets.Anim
     return ret;
 }
 
+const LevelHeader = struct {
+    copyright: [180]u8,
+    magic: [4]u8,
+    password_hash: [3]u8, // 0xBEBA00 if no password
+    hide_level: u8,
+    level_name: [32]u8,
+    version: u16,
+    file_size: i32,
+    CRC: u32,
+    CData_info: i32,
+    UData_info: i32,
+    CData_events: i32,
+    UData_events: i32,
+    CData_dict: i32,
+    UData_dict: i32,
+    CData_layout: i32,
+    UData_layout: i32,
+};
+
+const LevelInfo = struct {
+    jc_horizontal_offset: u16, // in pixels
+    security_1: u16, // 0xBA00 if passworded, 0x0000 otherwise
+    jc_vertical_offset: u16, // in pixels
+    security_2: u16, // 0xBA00 if passworded, 0x0000 otherwise
+    sec_and_layer: u8, //  Upper 4 bits are set if passworded, zero otherwise. Lower 4 bits represent the layer number as last saved in JCS.
+    lighting_min: u8, // Multiply by 1.5625 to get value seen in JCS
+    lighting_start: u8, // Multiply by 1.5625 to get value seen in JCS
+    anim_count: u16,
+    vertical_split_screen: bool,
+    is_multiplier_level: bool,
+    buffer_size: i32,
+    level_name: [32]u8,
+    tileset: [32]u8,
+    bonus_level: [32]u8,
+    next_level: [32]u8,
+    secret_level: [32]u8,
+    music_file: [32]u8,
+    help_string: [16][512]u8,
+    // TODO: sound effects for AGA version: [48][64]u8
+    layer_flags: [8]u32, // Bit flags in the following order: Tile Width, Tile Height, Limit Visible Region, Texture Mode, Parallax Stars. This leaves 27 (32-5) unused bits?
+    layer_type: [8]u8,
+    layer_main: [8]bool, // true for layer 4
+    layer_width: [8]i32,
+    layer_internal_width: [8]i32,
+    layer_height: [8]i32,
+    layer_z_axis: [8]i32,
+    layer_detail: [8]u8,
+    layer_offset_x: [8]i32, // divide by 65536 to get the value
+    layer_offset_y: [8]i32, // divide by 65536 to get the value
+    layer_speed_x: [8]i32, // divide by 65536 to get the value
+    layer_speed_y: [8]i32, // divide by 65536 to get the value
+    layer_auto_speed_x: [8]i32, // divide by 65536 to get the value
+    layer_auto_speed_y: [8]i32, // divide by 65536 to get the value
+    layer_texture_background_type: [8]u8,
+    layer_texture_params_rgb: [8][3]u8,
+    anim_offset: u16, // MAX_TILES minus AnimCount, also called StaticTiles
+    tileset_events:[]i32, // size: version <= 0x202? 1024:4096
+    tile_flipped: []bool, // size: version <= 0x202? 1024:4096
+    tile_types: []u8, // size: version <= 0x202? 1024:4096
+    tile_x_mask: []u8, // size: version <= 0x202? 1024:4096
+    
+    fn init(allocator: std.mem.Allocator, version: u16) !LevelInfo {
+        const tile_count = if (version <= 0x202) 1024 else 4096;
+        var ret: LevelInfo = undefined;
+        ret.tileset_events = try allocator.alloc(i32, tile_count);
+        ret.tile_flipped = try allocator.alloc(bool, tile_count);
+        ret.tile_types = try allocator.alloc(u8, tile_count);
+        ret.tile_x_mask = try allocator.alloc(u8, tile_count);
+        return ret;
+    }
+
+    fn deinit(self: *TilesetInfo, allocator: std.mem.Allocator) void {
+        allocator.free(self.tileset_events);
+        allocator.free(self.tile_flipped);
+        allocator.free(self.tile_types);
+        allocator.free(self.tile_x_mask);
+    }
+};
+
+const AnimatedTile = struct {
+    delay: u16, // frame wait
+    delay_jitter: u16,
+    reverse_delay: u16,
+    is_ping_pong: bool,
+    speed: u8,
+    frame_count: u8,
+    frames: [64]u16,
+};
+
+pub fn load_level(allocator: std.mem.Allocator, path: []const u8) !assets.Level {
+    info("Loading level {s}", .{path});
+    var file = try std.fs.cwd().openFile(path, .{});
+    defer file.close();
+
+    const header = try readStruct(LevelHeader, &file);
+    if (!std.mem.eql(u8, &header.magic, "LEVL")) {
+        err("Loading level {s} error: expected LEVL, got '{s}'", .{path, header.magic});
+        return error.InvalidFormat;
+    }
+
+    debug("Reading info block: cdata={}, udata={}", .{header.CData_info, header.UData_info});
+    const info_blk = try decompress(allocator, &file, @intCast(header.CData_info), @intCast(header.UData_info));
+    defer allocator.free(info_blk);
+
+    debug("Reading event block: cdata={}, udata={}", .{header.CData_events, header.UData_events});
+    const event_block = try decompress(allocator, &file, @intCast(header.CData_events), @intCast(header.UData_events));
+    defer allocator.free(event_block);
+
+    debug("Reading dictionary block: cdata={}, udata={}", .{header.CData_dict, header.UData_dict});
+    const dict_block = try decompress(allocator, &file, @intCast(header.CData_dict), @intCast(header.UData_dict));
+    defer allocator.free(dict_block);
+    
+    debug("Reading layout block: cdata={}, udata={}", .{header.CData_layout, header.UData_layout});
+    const layout_blk = try decompress(allocator, &file, @intCast(header.CData_layout), @intCast(header.UData_layout));
+    defer allocator.free(layout_blk);
+
+
+    const ret: assets.Level = .{
+        .alloc = allocator,
+    };
+
+    return ret;
+}
+
 const TEST_DATA_TILES = "test_data1/v123";
 // const TEST_DATA_TILES = "test_data1/v888";
 const TEST_DATA_ANIMS = "test_data1/v123";
@@ -566,7 +715,8 @@ test "Loading anims" {
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
-    try load_animset(gpa.allocator(), "/home/rr/Games/Jazz2/Anims.j2a");
+    var a = try load_animset(gpa.allocator(), "/home/rr/Games/Jazz2/Anims.j2a");
+    defer a.deinit();
 }
 
 
@@ -606,4 +756,15 @@ test "Load all .j2t tilesets from TEST_DATA_TILES "  {
 
         try expect(t.version == 0x200 or t.version == 0x201);
     }
+}
+
+test "Loading level" {
+    const gfx = @import("gfx.zig");
+    try gfx.init();
+    gfx.init_window();
+    defer gfx.deinit();
+    var alloc = std.heap.DebugAllocator(.{}){};
+    defer _ = alloc.deinit();
+    var l = try load_level(alloc.allocator(), "/home/rr/Games/Jazz2/Castle1.j2l");
+    defer l.deinit();
 }
