@@ -1,27 +1,27 @@
-//! This module provides functions for reading and writing binary data.
-//! This is not a serializer, it's more like a facility to build a serializer.
+//! This module provides utilities for reading and writing binary data in Zig.
+//! It is designed to help build custom serializers and deserializers for binary formats.
+//! It supports reading primitive types, arrays, structs, enums, and slices, with endianness control.
+
 const std = @import("std");
 const builtin = @import("builtin");
 
-const Error = error {EnumConversionError};
+/// Custom error for enum conversion failures.
+const Error = error{EnumConversionError};
 
-/// Reads a value of type `T` from the `file`.
-/// Current cpu endian is assumed. Use `fread_ex` for contolling this parameter.
-/// - `T`: the type to deserialize 
-/// - `file`: an instance of `std.fs.File`. Must be open for reading.
-pub fn fread(comptime T: type, file: *std.fs.File) 
-   (std.Io.Reader.Error || Error || std.posix.ReadError)!T {
+/// Reads a value of type `T` from a file using the system's native endianness.
+/// - `T`: Type to read (e.g., u32, struct, enum)
+/// - `file`: Pointer to an open `std.fs.File` for reading.
+/// Returns: The value of type `T` or an error.
+pub fn fread(comptime T: type, file: *std.fs.File) (std.Io.Reader.Error || Error || std.posix.ReadError)!T {
     const endian = builtin.cpu.arch.endian();
     return fread_ex(T, file, endian);
 }
 
-/// Reads a value of type `T` from the `file`.
-/// Current cpu endian is assumed. Use `fread_ex` for contolling this parameter.
-/// - `T`: the type to deserialize 
-/// - `file`: an instance of `std.fs.File`. Must be open for reading.
-/// - `endian`: endianness
-pub fn fread_ex(comptime T: type, file: *std.fs.File, endian: std.builtin.Endian) 
-   (std.Io.Reader.Error || Error || std.posix.ReadError)!T {
+/// Reads a value of type `T` from a file with specified endianness.
+/// - `T`: Type to read
+/// - `file`: Pointer to an open `std.fs.File`
+/// - `endian`: Endianness to use (big or little)
+pub fn fread_ex(comptime T: type, file: *std.fs.File, endian: std.builtin.Endian) (std.Io.Reader.Error || Error || std.posix.ReadError)!T {
     var buff: [size_of(T)]u8 = undefined;
     const r = try file.read(&buff);
     if (r != buff.len) {
@@ -31,31 +31,40 @@ pub fn fread_ex(comptime T: type, file: *std.fs.File, endian: std.builtin.Endian
     return try read_ex(T, &reader, endian);
 }
 
-/// Reads a value of type `T` from the `stream`.
-/// Current cpu endian is assumed. Use `read_ex` for contolling this parameter.
-/// - `T`: the type to deserialize 
-/// - `stream`: an instance of `std.Io.Reader`
-pub fn read(comptime T: type, stream: *std.Io.Reader) 
-    (std.Io.Reader.Error || Error)!T {
+/// Reads a value of type `T` from a stream using the system's native endianness.
+/// - `T`: Type to read
+/// - `stream`: Pointer to a `std.Io.Reader`
+pub fn read(comptime T: type, stream: *std.Io.Reader) (std.Io.Reader.Error || Error)!T {
     const endian = builtin.cpu.arch.endian();
     return read_ex(T, stream, endian);
 }
 
-/// Reads a value of type `T` from the `stream`.
-/// - `T`: the type to deserialize 
-/// - `stream`: an instance of `std.Io.Reader`
-/// - `endian`: endianness
-pub fn read_ex(comptime T: type, stream: *std.Io.Reader, endian: std.builtin.Endian)
-    (std.Io.Reader.Error || Error)!T {
+/// Reads a value of type `T` from a stream with specified endianness.
+/// - `T`: Type to read
+/// - `stream`: Pointer to a `std.Io.Reader`
+/// - `endian`: Endianness to use
+pub fn read_ex(comptime T: type, stream: *std.Io.Reader, endian: std.builtin.Endian) (std.Io.Reader.Error || Error)!T {
+    var ret: T = undefined;
+    _ = try read_dyn(T, stream, &ret, endian);
+    return ret;
+}
+
+/// Dynamically reads a value of type `T` from a stream, supporting arrays, structs, enums, and slices.
+/// - `T`: Type to read
+/// - `stream`: Pointer to a `std.Io.Reader`
+/// - `value`: Pointer to the output variable
+/// - `endian`: Endianness to use
+/// Returns: Number of bytes read
+pub fn read_dyn(comptime T: type, stream: *std.Io.Reader, value: *T, endian: std.builtin.Endian) (std.Io.Reader.Error || Error)!usize {
     switch (@typeInfo(T)) {
-        .bool => return try stream.takeByte() != 0,
+        .bool => value.* = try stream.takeByte() != 0,
         .int => switch (T) {
-            u8 => return try stream.takeByte(),
-            i8 => return try stream.takeByteSigned(),
-            u16, i16, u32, i32, u64, i64, u128, i128 => return try stream.takeInt(T, endian),
+            u8 => value.* = try stream.takeByte(),
+            i8 => value.* = try stream.takeByteSigned(),
+            u16, i16, u32, i32, u64, i64, u128, i128 => value.* = try stream.takeInt(T, endian),
             else => @compileError("Unsupported integer type " ++ @typeName(T)),
         },
-        .float => return @bitCast(switch (T) {
+        .float => value.* = @bitCast(switch (T) {
             f16 => try stream.takeInt(u16, endian),
             f32 => try stream.takeInt(u32, endian),
             f64 => try stream.takeInt(u64, endian),
@@ -63,28 +72,29 @@ pub fn read_ex(comptime T: type, stream: *std.Io.Reader, endian: std.builtin.End
             f128 => try stream.takeInt(u128, endian),
             else => @compileError("Unsupported floating type " ++ @typeName(T)),
         }),
-        .array => |arr| { 
-            var ret_arr: T = undefined;
+        .array => |arr| {
+            var read_bytes: usize = 0;
             if (arr.child == u8) {
-                try stream.readSliceAll(&ret_arr);
+                try stream.readSliceAll(value);
+                read_bytes = arr.len;
             } else {
-                for (&ret_arr) |*item| {
-                    item.* = try read_ex(arr.child, stream, endian);
+                for (value) |*item| {
+                    read_bytes += try read_dyn(arr.child, stream, item, endian);
                 }
             }
-            return ret_arr;
+            return read_bytes;
         },
         .@"struct" => |str| {
-            if (@hasDecl(T, "marker_skip_n")) {
-                const skip_n = T.marker_skip_n;
+            if (@hasDecl(T, "marker skip n")) {
+                const skip_n = T.@"marker skip n";
                 stream.toss(skip_n);
-                return undefined;
+                return skip_n;
             }
-            var s: T = undefined;
+            var read_bytes: usize = 0;
             inline for (str.fields) |field| {
-                @field(s, field.name) = try read_ex(field.type, stream, endian);
+                read_bytes += try read_dyn(field.type, stream, &@field(value, field.name), endian);
             }
-            return s;
+            return read_bytes;
         },
         .@"enum" => |en| {
             switch (en.tag_type) {
@@ -92,26 +102,45 @@ pub fn read_ex(comptime T: type, stream: *std.Io.Reader, endian: std.builtin.End
                 else => @compileError("Enum tag_type " ++ @typeName(en.tag_type) ++ " not supported."),
             }
             const tag_value = try stream.takeInt(en.tag_type, endian);
-            var ret: T = undefined;
-            ret = std.enums.fromInt(T, tag_value) orelse return Error.EnumConversionError;
-            return ret;
+            value.* = std.enums.fromInt(T, tag_value) orelse return Error.EnumConversionError;
         },
-        .pointer => @compileError("Pointers, slices (" ++ @typeName(T) ++ ") are not supported by 'static' read function."),
+        .pointer => |ptr| {
+            if (ptr.sentinel() != null) @compileError("Pointers sentinels are not supported.");
+            if (ptr.size != .slice) {
+                @compileError("Pointers (" ++ @typeName(T) ++ ") are not supported.");
+            }
+            // slices here, slice is expected to be initialized, otherwise nothing will be read
+            if (value.len == 0) {
+                return 0;
+            }
+            if (ptr.child == u8) {
+                try stream.readSliceAll(value.*);
+                return value.len;
+            } else {
+                var read_bytes: usize = 0;
+                for (value.*) |*item| {
+                    read_bytes += try read_dyn(ptr.child, stream, item, endian);
+                }
+                return read_bytes;
+            }
+        },
         else => @compileError("Unsupported type " ++ @typeName(T)),
     }
-    unreachable;
+
+    return @sizeOf(T);
 }
 
-/// Return size of `T` skipping any potential holes related to the alignment.
-/// The size should be equal to `T` if it was packed.
+/// Returns the packed size of type `T`, ignoring alignment holes.
+/// Useful for binary serialization.
+/// - `T`: Type to measure
 pub fn size_of(comptime T: type) usize {
     switch (@typeInfo(T)) {
         .bool, .int, .float => return @sizeOf(T),
         .array => |arr| return @sizeOf(arr.child) * arr.len,
         .@"struct" => |str| {
-            if (@hasDecl(T, "marker_skip_n")) {
+            if (@hasDecl(T, "marker skip n")) {
                 // this is a marker struct
-                return T.marker_skip_n;
+                return T.@"marker skip n";
             }
             var len: usize = 0;
             inline for (str.fields) |field| {
@@ -128,18 +157,22 @@ pub fn size_of(comptime T: type) usize {
         },
         else => @compileError("Unsupported type " ++ @typeName(T)),
     }
-        unreachable;
+    unreachable;
 }
 
-/// Creates a marker structure.
-pub fn marker_skip_n(comptime N: usize) type { 
+/// Creates a marker struct that skips `N` bytes when reading.
+/// Useful for skipping unused or reserved fields in binary formats.
+pub fn marker_skip_n(comptime N: usize) type {
     return struct {
-        pub const marker_skip_n = N;
+        pub const @"marker skip n" = N;
     };
 }
 
+// --- Tests ---
+// The following tests demonstrate reading various types and structures from binary buffers.
+// They cover booleans, integers, arrays, nested structs, and enums.
 test "Read bool, u8, u16, u32, [4]u8, [2]u16, [1]u32" {
-    const buff = [_]u8 {
+    const buff = [_]u8{
         0x01, // true
         0x00, // false
         0xFF, // true
@@ -156,7 +189,6 @@ test "Read bool, u8, u16, u32, [4]u8, [2]u16, [1]u32" {
     try std.testing.expect(try read(u8, &r) == 0x00);
     try std.testing.expect(try read(u8, &r) == 0xFF);
     try std.testing.expect(try read(u8, &r) == 0xAB);
-
 
     r = std.Io.Reader.fixed(&buff);
     const arr = try read([4]u8, &r);
@@ -209,14 +241,15 @@ test "nested structs" {
         f3: [2]Nested,
     };
     // Root's binary representation
-    const buf = [_]u8 {
+    const buf = [_]u8{
         0xCD, // f1
         0x00, 0x12, 0x34, // f2
-        0x14, 0x56, 0x86, 0xA6, 0x7B, 0xBB,
+        0x14, 0x56, 0x86,
+        0xA6, 0x7B, 0xBB,
     };
     var r = std.Io.Reader.fixed(&buf);
     const root = try read(Root, &r);
-    
+
     try std.testing.expect(root.f1 == 0xCD);
 
     if (builtin.target.cpu.arch.endian() == .little) {
@@ -250,7 +283,7 @@ test "enums" {
     };
     const E3 = enum(u8) { A, _ };
 
-    const buf = [_]u8 {
+    const buf = [_]u8{
         0x00, 0x00, 0x00, 0x00, // E1
         0x04, 0x02, // E2
         0x86, // E3

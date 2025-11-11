@@ -70,25 +70,26 @@ fn readStruct(comptime T: type, file: *std.fs.File) !T {
 /// This function is aware of existing slice members - they'll be populated
 /// with data according to their current size
 fn readStructWithSlices(comptime T: type, v: *T, reader: anytype) !void {
-    const fields = std.meta.fields(T);
-    inline for (fields) |field| {
-        const F = field.type;
-        const is_slice = ((F == []u8) or (F == []u16) or (F == []u32) or
-            (F == []i8) or (F == []i16) or (F == []i32));
-        // TODO: raise a compilation error if unsupported slice is encountered
-        if (is_slice) {
-            const member = @field(v, field.name);
-            const member_bytes_len = member.len * @sizeOf(@TypeOf(member[0]));
-            const dst_as_bytes = std.mem.sliceAsBytes(member);
-            @memcpy(dst_as_bytes, reader.buffered()[0..member_bytes_len]);
-            reader.toss(member_bytes_len);
-        } else { // primitive types, static arrays
-            @field(v, field.name) = try readPrim(F, reader);
-        }
-        if (@typeInfo(F) == .@"struct")
-            @compileError("Member structs are not allowed: " ++ @typeName(F));
-        // TODO: more restrictions like pointers, enums, errors, arrays with non-trivial types, etc.
-    }
+    _ = try easy_bit.read_dyn(T, reader, v, .little);
+    // const fields = std.meta.fields(T);
+    // inline for (fields) |field| {
+    //     const F = field.type;
+    //     const is_slice = ((F == []u8) or (F == []u16) or (F == []u32) or
+    //         (F == []i8) or (F == []i16) or (F == []i32));
+    //     // TODO: raise a compilation error if unsupported slice is encountered
+    //     if (is_slice) {
+    //         const member = @field(v, field.name);
+    //         const member_bytes_len = member.len * @sizeOf(@TypeOf(member[0]));
+    //         const dst_as_bytes = std.mem.sliceAsBytes(member);
+    //         @memcpy(dst_as_bytes, reader.buffered()[0..member_bytes_len]);
+    //         reader.toss(member_bytes_len);
+    //     } else { // primitive types, static arrays
+    //         @field(v, field.name) = try readPrim(F, reader);
+    //     }
+    //     if (@typeInfo(F) == .@"struct")
+    //         @compileError("Member structs are not allowed: " ++ @typeName(F));
+    //     // TODO: more restrictions like pointers, enums, errors, arrays with non-trivial types, etc.
+    // }
 }
 
 fn decompress(allocator: std.mem.Allocator, file: anytype, c_size: usize, u_size: usize) ![]u8 {
