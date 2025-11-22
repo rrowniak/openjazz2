@@ -15,81 +15,8 @@ comptime {
     }
 }
 
-inline fn readPrim(comptime T: type, reader: anytype) !T {
-    var buf: [@sizeOf(T)]u8 = undefined;
-
-    // if (@TypeOf(reader) == *std.fs.File) {
-    //     _ = try reader.read(&buf);
-    //     var r = std.Io.Reader.fixed(&buf);
-    //     return try easy_bit.read(T, &r);
-    // }
-
-    const read = if (@TypeOf(reader) == *std.fs.File) 
-        try reader.read(&buf)
-    else if (@TypeOf(reader) == *std.Io.Reader)
-        try reader.readSliceShort(&buf)
-    else
-        @compileError("Unsupported reader type");
-    if (read != buf.len)
-        return error.EndOfStream;
-    return std.mem.bytesToValue(T, &buf);
-}
-
-/// Reads a binary representation of a struct `T` from the given `reader`.
-fn readStruct(comptime T: type, file: *std.fs.File) !T {
-    // var result: T = undefined;
-    //
-    // const fields = std.meta.fields(T);
-    // inline for (fields) |field| {
-    //     const F = field.type;
-    //     @field(result, field.name) = try readPrim(F, file);
-    //     if (@typeInfo(F) == .@"struct")
-    //         @compileError("Member structs are not allowed: " ++ @typeName(F));
-    //     // TODO: more restrictions like pointers, enums, errors, arrays with non-trivial types, etc.
-    // }
-    // return result;
-
-    // var buff: [@bitSizeOf(T)/8]u8 = undefined;
-    // var buff: [easy_bit.size_of(T)]u8 = undefined;
-    // // var reader = file.reader(&buff);
-    // var reader = file.readerStreaming(&buff);
-    // // try reader.seekTo(try file.getPos());
-    // return try easy_bit.read(T, &reader.interface);
-
-    // var buff: [easy_bit.size_of(T)]u8 = undefined;
-    // const r = try file.read(&buff);
-    // if (r != buff.len) {
-    //     return error.EndOfStream;
-    // }
-    // var reader = std.Io.Reader.fixed(&buff);
-    // return try easy_bit.read(T, &reader);
-    return try easy_bit.fread(T, file);
-}
-
-/// Reads a binary representation of a struct `T` from the given `reader`.
-/// This function is aware of existing slice members - they'll be populated
-/// with data according to their current size
-fn readStructWithSlices(comptime T: type, v: *T, reader: anytype) !void {
+fn readStructWithSlices_(comptime T: type, v: *T, reader: anytype) !void {
     _ = try easy_bit.read_dyn(T, reader, v, .little);
-    // const fields = std.meta.fields(T);
-    // inline for (fields) |field| {
-    //     const F = field.type;
-    //     const is_slice = ((F == []u8) or (F == []u16) or (F == []u32) or
-    //         (F == []i8) or (F == []i16) or (F == []i32));
-    //     // TODO: raise a compilation error if unsupported slice is encountered
-    //     if (is_slice) {
-    //         const member = @field(v, field.name);
-    //         const member_bytes_len = member.len * @sizeOf(@TypeOf(member[0]));
-    //         const dst_as_bytes = std.mem.sliceAsBytes(member);
-    //         @memcpy(dst_as_bytes, reader.buffered()[0..member_bytes_len]);
-    //         reader.toss(member_bytes_len);
-    //     } else { // primitive types, static arrays
-    //         @field(v, field.name) = try readPrim(F, reader);
-    //     }
-    //     if (@typeInfo(F) == .@"struct")
-    //         @compileError("Member structs are not allowed: " ++ @typeName(F));
-    //     // TODO: more restrictions like pointers, enums, errors, arrays with non-trivial types, etc.
-    // }
 }
 
 fn decompress(allocator: std.mem.Allocator, file: anytype, c_size: usize, u_size: usize) ![]u8 {
@@ -184,7 +111,7 @@ pub fn load_tileset(allocator: std.mem.Allocator, path: []const u8) !assets.Tile
     var file = try std.fs.cwd().openFile(path, .{});
     defer file.close();
 
-    const header = try readStruct(TilesetHeader, &file);
+    const header = try easy_bit.fread(TilesetHeader, &file);
     // check invariants
     if (!std.mem.eql(u8, &header.magic, "TILE")) {
         err("Loading tileset {s} error: expected magic TILE, got '{s}'", .{path, header.magic});
@@ -218,7 +145,7 @@ pub fn load_tileset(allocator: std.mem.Allocator, path: []const u8) !assets.Tile
     var info_s: TilesetInfo = try .init_arrays_only(allocator, header.version);
     defer info_s.deinit(allocator);
     var r = std.Io.Reader.fixed(info_blk);
-    try readStructWithSlices(TilesetInfo, &info_s, &r);
+    try readStructWithSlices_(TilesetInfo, &info_s, &r);
     // extract & process images
     var ret: assets.Tileset = .{
         .tiles = try allocator.alloc(assets.Tile, @intCast(info_s.tile_count)),
@@ -226,10 +153,7 @@ pub fn load_tileset(allocator: std.mem.Allocator, path: []const u8) !assets.Tile
         .palette = info_s.palette,
         .alloc = allocator,
     };
-    // const s = try @import("trash.zig").paletteToString(allocator, info_s.palette);
-    // defer allocator.free(s);
-    // std.log.debug("Palette: {s}", .{s});
-
+    
     for (0..@intCast(info_s.tile_count)) |i| {
         const image_off = info_s.img_offset[i] & ~Mask32bitTile;
         const is_32bit_tile = info_s.img_offset[i] & Mask32bitTile != 0;
@@ -319,14 +243,14 @@ const Frame = struct {
         frame.height = h;
         frame.pixels = try allocator.alloc(u8, w * h);
         @memset(frame.pixels[0..frame.pixels.len], 0);
-        const width = try readPrim(u16, reader);
-        _ = try readPrim(u16, reader);
+        const width = try easy_bit.read(u16, reader);
+        _ = try easy_bit.read(u16, reader);
         frame.draw_transparent = (width & 0x8000) > 0;
 
         var indx: usize = 0;
         var last_op_empty = true;
         while (indx < w * h) {
-            const op = try readPrim(u8, reader);
+            const op = try easy_bit.read(u8, reader);
             if (op < 0x80)  { // skip `op` pixels
                 indx += op; 
             } else if (op == 0x80) { // skip to end of line
@@ -386,7 +310,7 @@ pub fn load_animset(allocator: std.mem.Allocator, path: []const u8) !assets.Anim
     var file = try std.fs.cwd().openFile(path, .{});
     defer file.close();
 
-    const header = try readStruct(AnimlibHeader, &file);
+    const header = try easy_bit.fread(AnimlibHeader, &file);
     if (!std.mem.eql(u8, &header.magic, "ALIB")) {
         err("Loading animlib {s} error: expected magic ALIB, got '{s}'", .{path, header.magic});
         return error.InvalidFormat;
@@ -411,14 +335,13 @@ pub fn load_animset(allocator: std.mem.Allocator, path: []const u8) !assets.Anim
     for (anim_blocks.addresses, 0..) |a, i| {
         // read set
         try file.seekTo(@intCast(a));
-        const anim_header = try readStruct(AnimHeader, &file);
+        const anim_header = try easy_bit.fread(AnimHeader, &file);
 
         if (!std.mem.eql(u8, &anim_header.magic, "ANIM")) {
             err("Loading animheader block #{d} error: expected magic ANIM, got '{s}'", .{i, anim_header.magic});
             return error.InvalidFormat;
         }
         // read & decompress blocks 
-        // debug("Reading info block: cdata={}, udata={}", .{anim_header.CData_info, anim_header.UData_info});
         const info_blk = try decompress(allocator, &file, @intCast(anim_header.CData_info), @intCast(anim_header.UData_info));
         defer allocator.free(info_blk);
 
@@ -438,13 +361,13 @@ pub fn load_animset(allocator: std.mem.Allocator, path: []const u8) !assets.Anim
         for (0..anim_header.anim_count) |j| {
             // read animation
             var anim_info: AnimInfo = undefined;
-            try readStructWithSlices(AnimInfo, &anim_info, &info_blk_reader);
+            try readStructWithSlices_(AnimInfo, &anim_info, &info_blk_reader);
             ret.blocks[i].anims[j].frame_rate = anim_info.frame_rate;
             ret.blocks[i].anims[j].frames = try allocator.alloc(assets.Frame, anim_info.frame_count);
             for (0..anim_info.frame_count) |k| {
                 // read frame
                 var frame_info: FrameInfo = undefined;
-                try readStructWithSlices(FrameInfo, &frame_info, &frame_blk_reader);
+                try readStructWithSlices_(FrameInfo, &frame_info, &frame_blk_reader);
                 var r = std.Io.Reader.fixed(image_blk[@intCast(frame_info.image_address)..]);
                 var f = try Frame.init(
                     allocator,
@@ -472,7 +395,7 @@ pub fn load_animset(allocator: std.mem.Allocator, path: []const u8) !assets.Anim
 
         for (0..anim_header.sample_count) |j| {
             var sample_header: SampleHeader = undefined;
-            try readStructWithSlices(SampleHeader, &sample_header, &sample_blk_reader);
+            try readStructWithSlices_(SampleHeader, &sample_header, &sample_blk_reader);
 
             if (sample_header.format != 0x46465341 and sample_header.format != 0x20205341) {
                 err("Invalid sound format expected 0x46465341 or 0x20205341, got 0x{x}", .{sample_header.format});
@@ -491,7 +414,7 @@ pub fn load_animset(allocator: std.mem.Allocator, path: []const u8) !assets.Anim
             sample_blk_reader.toss(discard_bytes);
             
             var sample_details: SampleDetails = undefined;
-            try readStructWithSlices(SampleDetails, &sample_details, &sample_blk_reader);
+            try readStructWithSlices_(SampleDetails, &sample_details, &sample_blk_reader);
 
             if (is_asff) {
                 sample_details.sample_multiplier = 0;
@@ -508,7 +431,7 @@ pub fn load_animset(allocator: std.mem.Allocator, path: []const u8) !assets.Anim
             var sample_data: SampleData = try .init(allocator, @intCast(data_size));
             // defer sample_data.deinit(allocator);
             // don't defer, just reassing to the destination structure
-            try readStructWithSlices(SampleData, &sample_data, &sample_blk_reader);
+            try readStructWithSlices_(SampleData, &sample_data, &sample_blk_reader);
             ret.blocks[i].samples[j].data = sample_data.data;
             // padding
             if (sample_header.total_size > sample_header.chunk_size + 12) {
@@ -551,7 +474,7 @@ const LevelInfo = struct {
     lighting_start: u8, // Multiply by 1.5625 to get value seen in JCS
     anim_count: u16,
     vertical_split_screen: bool,
-    is_multiplier_level: bool,
+    is_multiplayer_level: bool,
     buffer_size: i32,
     level_name: [32]u8,
     tileset: [32]u8,
@@ -582,22 +505,28 @@ const LevelInfo = struct {
     tile_flipped: []bool, // size: version <= 0x202? 1024:4096
     tile_types: []u8, // size: version <= 0x202? 1024:4096
     tile_x_mask: []u8, // size: version <= 0x202? 1024:4096
+    // TODO: UnknownAGA 32768 bytes
+    animated_tiles: []AnimatedTile,
     
     fn init(allocator: std.mem.Allocator, version: u16) !LevelInfo {
-        const tile_count = if (version <= 0x202) 1024 else 4096;
+        const tile_count: usize = if (version <= 0x202) 1024 else 4096;
         var ret: LevelInfo = undefined;
         ret.tileset_events = try allocator.alloc(i32, tile_count);
         ret.tile_flipped = try allocator.alloc(bool, tile_count);
         ret.tile_types = try allocator.alloc(u8, tile_count);
         ret.tile_x_mask = try allocator.alloc(u8, tile_count);
+        ret.animated_tiles = &.{};
+        // notice that we don't allocate `ret.animated_tiles` because the size isn't
+        // known at this time. The reader will skip this field - it will be read later
         return ret;
     }
 
-    fn deinit(self: *TilesetInfo, allocator: std.mem.Allocator) void {
+    fn deinit(self: *LevelInfo, allocator: std.mem.Allocator) void {
         allocator.free(self.tileset_events);
         allocator.free(self.tile_flipped);
         allocator.free(self.tile_types);
         allocator.free(self.tile_x_mask);
+        allocator.free(self.animated_tiles);
     }
 };
 
@@ -616,7 +545,7 @@ pub fn load_level(allocator: std.mem.Allocator, path: []const u8) !assets.Level 
     var file = try std.fs.cwd().openFile(path, .{});
     defer file.close();
 
-    const header = try readStruct(LevelHeader, &file);
+    const header = try easy_bit.fread(LevelHeader, &file);
     if (!std.mem.eql(u8, &header.magic, "LEVL")) {
         err("Loading level {s} error: expected LEVL, got '{s}'", .{path, header.magic});
         return error.InvalidFormat;
@@ -637,10 +566,86 @@ pub fn load_level(allocator: std.mem.Allocator, path: []const u8) !assets.Level 
     debug("Reading layout block: cdata={}, udata={}", .{header.CData_layout, header.UData_layout});
     const layout_blk = try decompress(allocator, &file, @intCast(header.CData_layout), @intCast(header.UData_layout));
     defer allocator.free(layout_blk);
+    // read LevelInfo
+    var lev_info: LevelInfo = try .init(allocator, header.version);
+    defer lev_info.deinit(allocator);
+    var r = std.Io.Reader.fixed(info_blk);
+    try readStructWithSlices_(LevelInfo, &lev_info, &r);
+    // this allocation will be handled by `deinit` function
+    lev_info.animated_tiles = try allocator.alloc(AnimatedTile, lev_info.anim_count);
+    try readStructWithSlices_([]AnimatedTile, &lev_info.animated_tiles, &r);
+    // read events
+    var events: []u32 = try allocator.alloc(u32, 
+        @intCast(lev_info.layer_width[3] * lev_info.layer_height[3]));
+    defer allocator.free(events);
 
+    var r_ev = std.Io.Reader.fixed(event_block);
+    try readStructWithSlices_([]u32, &events, &r_ev);
+    // read dictionary and layout
+    var r_dict = std.Io.Reader.fixed(dict_block);
+    var r_layout = std.Io.Reader.fixed(layout_blk);
+
+    const DictRecord = struct {
+        tiles: [4]u16,
+    };
+    var dict_records = try allocator.alloc(DictRecord, dict_block.len / 8);
+    defer allocator.free(dict_records);
+    try readStructWithSlices_([]DictRecord, &dict_records, &r_dict);
+    
+    var layers: [8]assets.Layer = undefined;
+
+    for (0..8) |layer_num| {
+        // layers[layer_num].flags = assets.LayerFlags{};
+        if (lev_info.layer_main[layer_num]) {
+            const size_y: usize = @intCast(lev_info.layer_height[layer_num]);
+            layers[layer_num].tiles = try allocator.alloc([]?assets.LayerTile, size_y);
+            for (0..size_y) |y| {
+                const size_x = @as(usize, @intCast(
+                        @divExact(lev_info.layer_internal_width[layer_num],  4)
+                    )
+                );
+                layers[layer_num].tiles.?[y] = try allocator.alloc(?assets.LayerTile, size_x * 4);
+                for (0..size_x) |x| {
+                    const dict_id = try easy_bit.read(u16, &r_layout);
+                    const xx = x * 4;
+                    // lookup id
+                    for (0..4) |j| {
+                        if (j + xx > lev_info.layer_width[layer_num]) {
+                            break;
+                        }
+                        const id = dict_records[dict_id].tiles[j];
+                        layers[layer_num].tiles.?[y][x + j] = .{
+                            .id = id,
+                            .flip_x = false,
+                            .flip_y = false,
+                        };
+                    }
+                }
+            }
+        } else {
+            layers[layer_num].tiles = null;
+        }
+    }
+
+    // TODO: Load MLLE
+    if (easy_bit.fread([4]u8, &file)) |mlle_magic| {
+        if (std.mem.eql(u8, &mlle_magic, "MLLE")) {
+            debug("MLLE to be read{s}", .{"."});
+        } else {
+            debug("Wrong MLLE magic, got {s}", .{mlle_magic});
+        }
+    } else |err2| {
+        if (err2 != error.EndOfStream) {
+            debug("Something wrong: {}", .{err2});
+        } else {
+            debug("No MLLE {s}", .{"."});
+        }
+    }
 
     const ret: assets.Level = .{
         .alloc = allocator,
+        .tileset_name = lev_info.tileset,
+        .layers = layers,
     };
 
     return ret;
@@ -680,7 +685,7 @@ test "struct from memory" {
     tc.f4 = try alloc.alloc(u32, 2);
     defer alloc.free(tc.f4);
     var r = std.Io.Reader.fixed(&flat_bin_repr);
-    try readStructWithSlices(TestStruct, &tc, &r); 
+    try readStructWithSlices_(TestStruct, &tc, &r); 
 
     // std.debug.print("\nf1={x}\n", .{tc.f1});
     try expect(tc.f1 == 0xab);

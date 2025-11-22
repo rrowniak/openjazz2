@@ -6,12 +6,14 @@ const assets = @import("assets.zig");
 const assets_reader = @import("assets_reader.zig");
 const diag_tileset = @import("diag_tileset.zig");
 const diag_animset = @import("diag_animset.zig");
+const diag_level = @import("diag_level.zig");
 
 pub const log_level: std.log.Level = .debug;
 
 const DEFAULT_COMMAND = "tileset";
 const DEFAULT_TILESET =  "/home/rr/Games/Jazz2/Jungle1.j2t";
 const DEFAULT_ANIMSET =  "/home/rr/Games/Jazz2/Anims.j2a";
+const DEFAULT_LEVEL =  "/home/rr/Games/Jazz2/Beach.j2l";
 
 pub fn main() !void {
     std.debug.print("\nStarting {s}\n", .{"OpenJazz2"});
@@ -31,6 +33,7 @@ pub fn main() !void {
     var app: @import("app.zig").IApp = undefined;
     var tilesets: diag_tileset.DiagTileset = undefined;
     var animsets: diag_animset.DiagAnimset = undefined;
+    var level: diag_level.DiagLevel = undefined;
     if (std.mem.eql(u8, command, "tileset")) {
         // filename
         const arg = args.next() orelse DEFAULT_TILESET;
@@ -41,6 +44,10 @@ pub fn main() !void {
         const arg = args.next() orelse DEFAULT_ANIMSET;
         animsets = try .init(alloc, arg);
         app = animsets.app_cast();
+    } else if (std.mem.eql(u8, command, "level")) {
+        const arg = args.next() orelse DEFAULT_LEVEL;
+        level = try .init(alloc, arg);
+        app = level.app_cast();
     } else {
         std.debug.print("No command valid selected ({s})!\n", .{command});
         printHelp(prog_name);
@@ -64,6 +71,7 @@ fn printHelp(prog_name: []const u8) void {
         \\Commands:
         \\  tileset TILESET_FILE.j2t    Load and display a tileset file 
         \\  animset ANIMSET_FILE.j2a    Load and display a animset file 
+        \\  level LEVAL_FILE.j2l        Load and display a level file 
         \\  help                        Show this help
         \\
         \\If no arguments are passed, defaults are used.

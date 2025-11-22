@@ -3,13 +3,28 @@ const gfx = @import("gfx.zig");
 
 pub const JJ2Version = enum(u16) {
     Unknown = 0x0000,
-    BaseGame = 0x0001,
-    TSF = 0x0002,
-    HH = 0x0004,
-    CC = 0x0008,
-    PlusExtension = 0x0100,
-    SharewareDemo = 0x0200,
+    BaseGame = 0x0001, // Retail versions 1.20, 1.21, 1.22
+    TSF = 0x0002, // The Secret Files v1.23 (adds Lori)
+    HH = 0x0004, // Holiday Hare '98
+    CC = 0x0008, // The Christmas Chronicles (holiday pack)
+    PlusExtension = 0x0100, // Jazz 2 Plus (JJ2+, community patch)
+    SharewareDemo = 0x0200, // Shareware Edition (BaseGame and TSF)
     All = 0xffff,
+
+    pub fn init_from_tileset(version_id: u16) JJ2Version {
+        switch (version_id) {
+            0...0x200 => return .BaseGame,
+            0x300 => return .PlusExtension,
+            else => return .TSF,
+        }
+    }
+
+    pub fn init_from_level(version_id: u16) JJ2Version {
+        switch (version_id) {
+            0...0x202 => return .BaseGame,
+            else => return .TSF,
+        }
+    }
 };
 
 // Global palettes
@@ -190,11 +205,45 @@ pub const Animset = struct {
 };
 
 // Level
-// 
+//
+pub const LayerFlags = packed struct {
+    repeat_x: bool,
+    repeat_y: bool,
+    use_inherent_offset: bool,
+    unknown: bool,
+    parallax_stars: bool,
+};
+
+pub const LayerTile = struct {
+    id: usize,
+    flip_x: bool,
+    flip_y: bool,
+};
+
+pub const Layer = struct {
+    // flags: LayerFlags,
+    tiles: ?[][]?LayerTile,
+};
+
 pub const Level = struct {
     alloc: std.mem.Allocator,
+    // name: []u8,
+    tileset_name: [32]u8,
+    // bonus_level_name: []u8,
+    // next_level_name: []u8,
+    // secret_level_name: []u8,
+    // music_file_name: []u8,
+    layers: [8]Layer,
 
     pub fn deinit(self: *Level) void {
-        _ = self;
+
+        for (&self.layers) |*l| {
+            if (l.tiles) |t| {
+                for (t) |tt| {
+                    self.alloc.free(tt);
+                }
+                self.alloc.free(t);
+            }  
+        }
     }
 };

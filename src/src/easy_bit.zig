@@ -49,7 +49,8 @@ pub fn read_ex(comptime T: type, stream: *std.Io.Reader, endian: std.builtin.End
     return ret;
 }
 
-/// Dynamically reads a value of type `T` from a stream, supporting arrays, structs, enums, and slices.
+/// Dynamically reads a value of type `T` from a stream, supporting arrays, structs, enums, and slices. All slices must be initialized to proper length or to an empty slice (`&.{}`). Otherwise
+/// you'll get an undefined behaviour (crash if you're lucky).
 /// - `T`: Type to read
 /// - `stream`: Pointer to a `std.Io.Reader`
 /// - `value`: Pointer to the output variable
@@ -167,6 +168,23 @@ pub fn marker_skip_n(comptime N: usize) type {
         pub const @"marker skip n" = N;
     };
 }
+
+// pub fn print_fn(
+//     comptime T: type, v: *const T, 
+//     limit_collections: usize, 
+//     print_fun: fn (comptime []const u8, anytype) void) void {
+//
+//     print_fn_internal(T, v, limit_collections, print_fun, 0);
+// }
+//
+// fn print_fn_internal(
+//     comptime T: type, v: *const T, 
+//     limit_collections: usize, 
+//     print_fun: fn (comptime []const u8, anytype) void,
+//     offset: usize) void {
+//
+// }
+//
 
 // --- Tests ---
 // The following tests demonstrate reading various types and structures from binary buffers.
