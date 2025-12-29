@@ -1,4 +1,4 @@
-const sdl = @cImport({
+pub const sdl = @cImport({
     @cInclude("SDL3/SDL.h");
 });
 const std = @import("std");

@@ -13,7 +13,7 @@ pub const log_level: std.log.Level = .debug;
 const DEFAULT_COMMAND = "tileset";
 const DEFAULT_TILESET =  "/home/rr/Games/Jazz2/Jungle1.j2t";
 const DEFAULT_ANIMSET =  "/home/rr/Games/Jazz2/Anims.j2a";
-const DEFAULT_LEVEL =  "/home/rr/Games/Jazz2/Beach.j2l";
+const DEFAULT_LEVEL =  "/home/rr/Games/Jazz2/Castle1.j2l";
 
 pub fn main() !void {
     std.debug.print("\nStarting {s}\n", .{"OpenJazz2"});

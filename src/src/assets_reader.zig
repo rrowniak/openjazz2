@@ -605,19 +605,34 @@ pub fn load_level(allocator: std.mem.Allocator, path: []const u8) !assets.Level 
                     )
                 );
                 layers[layer_num].tiles.?[y] = try allocator.alloc(?assets.LayerTile, size_x * 4);
-                for (0..size_x) |x| {
+                var x: usize = 0;
+                while (x < lev_info.layer_internal_width[layer_num]) : (x += 4) {
                     const dict_id = try easy_bit.read(u16, &r_layout);
-                    const xx = x * 4;
                     // lookup id
                     for (0..4) |j| {
-                        if (j + xx > lev_info.layer_width[layer_num]) {
+                        if (j + x > lev_info.layer_width[layer_num]) {
                             break;
                         }
-                        const id = dict_records[dict_id].tiles[j];
+                        var id = dict_records[dict_id].tiles[j];
+                        // decode data
+                        const tile_count: u16, const tile_mask: u16 = 
+                            if (header.version <= 0x202) .{1024, 0x3FF} 
+                            else .{4096, 0xFFF};
+
+                        const flip_y = id & 0x2000 != 0;
+                        if (flip_y) // clean up this flag
+                            id = id & ~@as(u16, 0x2000);
+
+                        var flip_x = false;
+                        if (id & tile_count != 0) {
+                            flip_x = true;
+                            id = id & tile_mask;
+                        }
+
                         layers[layer_num].tiles.?[y][x + j] = .{
                             .id = id,
-                            .flip_x = false,
-                            .flip_y = false,
+                            .flip_x = flip_x,
+                            .flip_y = flip_y,
                         };
                     }
                 }

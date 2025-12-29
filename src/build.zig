@@ -56,6 +56,7 @@ pub fn build(b: *std.Build) void {
         "src/gfx.zig",
         // "src/main.zig",
         "src/utils.zig",
+        "src/diag_level.zig",
         "src/easy_bit.zig",
     };
 
