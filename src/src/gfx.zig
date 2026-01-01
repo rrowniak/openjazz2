@@ -24,6 +24,10 @@ pub fn get_renderer() *sdl.SDL_Renderer {
     return g_sdl_renderer.?;
 }
 
+pub fn get_window() *sdl.SDL_Window {
+    return g_sdl_window.?;
+}
+
 pub fn init() !void {
     if (!sdl.SDL_Init(sdl.SDL_INIT_VIDEO | sdl.SDL_INIT_AUDIO)) {
         std.debug.print("SDL init failed: {s}\n", .{sdl.SDL_GetError()});

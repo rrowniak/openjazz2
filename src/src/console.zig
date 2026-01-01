@@ -7,6 +7,7 @@ pub const VarPtr = union(enum) {
 };
 
 const FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf";
+const PROMPT = "jazz2> ";
 
 pub const Console = struct {
     alloc: std.mem.Allocator,
@@ -17,29 +18,44 @@ pub const Console = struct {
     bg_color: sdl.SDL_Color = .{ .r = 0, .g = 0, .b = 0, .a = 200 },
     font: *sdl.TTF_Font,
     line_height: f32 = 16,
-    lines: []const []const u8,
+    // lines
+    lines: std.array_list.Managed([]u8),
+    input: std.array_list.Managed(u8),
+    cursor_visible: bool = true,
+    last_blink_ms: u64 = 0,
 
     pub fn init(alloc: std.mem.Allocator) !@This() {
+        var lines = std.array_list.Managed([]u8).init(alloc);
+        try lines.append(try alloc.dupe(u8, "Jazz Jackrabbit 2 Console"));
+        try lines.append(try alloc.dupe(u8, "------------------------"));
         return .{
             .alloc = alloc,
             .variables = .init(alloc),
             .font = sdl.TTF_OpenFont(FONT_PATH, 14) orelse return error.FontLoadFailed,
-            .lines = &[_][]const u8 { "Jazz Jackrabbit 2 Console",
-                "------------------------",
-                "help",
-                "map castle1",
-                "godmode on",
-            },
+            .lines = lines,
+            .input = .init(alloc),
         };
     }
 
     pub fn deinit(self: *@This()) void {
         self.variables.deinit();
+        for (self.lines.items) |l| {
+            self.alloc.free(l);
+        }
+        self.lines.deinit();
+        self.input.deinit();
     }
 
     pub fn toggle_onoff(self: *@This()) void {
         self.enabled = !self.enabled;
-        // std.debug.print("Toggle {s}", .{"shell"});
+
+        if (self.enabled) {
+            _ = sdl.SDL_StartTextInput(gfx.get_window());
+            self.cursor_visible = true;
+            self.last_blink_ms = sdl.SDL_GetTicks();
+        } else {
+            _ = sdl.SDL_StopTextInput(gfx.get_window());
+        }
     }
 
     pub fn register(self: *@This(), name: []const u8, variable: anytype) void {
@@ -66,9 +82,14 @@ pub const Console = struct {
         }
     }
 
-    pub fn render_shell(self: @This()) void {
+    pub fn render_shell(self: *@This()) void {
         if (self.enabled) {
+            self.update_cursor();
+
             // process inputs
+            for (gfx.get_events()) |ev| {
+                self.handle_event(&ev);
+            }
             // render shell background
             _ = sdl.SDL_SetRenderDrawBlendMode(gfx.get_renderer(), sdl.SDL_BLENDMODE_BLEND);
             _ = sdl.SDL_SetRenderDrawColor(
@@ -82,9 +103,15 @@ pub const Console = struct {
             // render shell text
             const text_color = sdl.SDL_Color{ .r = 255, .g = 255, .b = 255, .a = 255 };
 
+            const render_lines = self.build_render_lines() catch {return;};
+            defer {
+                for (render_lines) |l| self.alloc.free(l);
+                self.alloc.free(render_lines);
+            }
+
             var y: f32 = self.rect.y + 5;
 
-            for (self.lines) |line| {
+            for (render_lines) |line| {
                 if (line.len == 0) {
                     y += self.line_height;
                     continue;
@@ -118,10 +145,103 @@ pub const Console = struct {
                 if (y > self.rect.y + self.rect.h)
                     break;
             }
+
+            // render cursor
+            const now = sdl.SDL_GetTicks();
+            if (now - self.last_blink_ms > 500) {
+                self.cursor_visible = !self.cursor_visible;
+                self.last_blink_ms = now;
+            }
         }
         self.render_runtime();
     }
+
     pub fn render_runtime(self: @This()) void {
         _ = self;
+    }
+    
+    fn handle_event(self: *@This(), event: *const sdl.SDL_Event) void {
+        switch (event.type) {
+            sdl.SDL_EVENT_TEXT_INPUT => {
+                const text = std.mem.span(event.text.text);
+                self.input.appendSlice(text) catch {};
+            },
+
+            sdl.SDL_EVENT_KEY_DOWN => {
+                const key = event.key;
+                if (key.repeat) return;
+
+                switch (key.scancode) {
+                    sdl.SDL_SCANCODE_BACKSPACE => {
+                        if (self.input.items.len > 0) {
+                            _ = self.input.pop();
+                        }
+                    },
+
+                    sdl.SDL_SCANCODE_RETURN,
+                    sdl.SDL_SCANCODE_KP_ENTER => {
+                        self.submit_line();
+                    },
+
+                    else => {},
+                }
+            },
+
+            else => {},
+        }
+    }
+
+    fn submit_line(self: *@This()) void {
+        if (self.input.items.len == 0)
+            return;
+
+        const line = self.alloc.alloc(u8, self.input.items.len + PROMPT.len)
+            catch return;
+
+        // std.mem.copyForwards(u8, line, self.input.items);
+        // std.mem.copyForwards(u8, line, self.input.items);
+        @memcpy(line[0..PROMPT.len], PROMPT);
+        @memcpy(line[PROMPT.len..], self.input.items);
+
+        self.lines.append(line) catch {};
+        self.input.clearRetainingCapacity();
+    }
+
+    fn update_cursor(self: *@This()) void {
+        const now = sdl.SDL_GetTicks();
+        if (now - self.last_blink_ms > 500) {
+            self.cursor_visible = !self.cursor_visible;
+            self.last_blink_ms = now;
+        }
+    }
+
+    fn build_render_lines(
+        self: *@This(),
+    ) ![]const []const u8 {
+        var list = std.array_list.Managed([]const u8).init(self.alloc);
+
+        // history
+        for (self.lines.items) |line| {
+            try list.append(try self.alloc.dupe(u8, line));
+        }
+
+        // input line
+        var temp = std.array_list.Managed(u8).init(self.alloc);
+        defer temp.deinit();
+
+        try temp.appendSlice(PROMPT);
+
+        try temp.appendSlice(self.input.items);
+
+        if (self.cursor_visible) {
+            try temp.append('_');
+        }
+
+        const rendered = try self.alloc.alloc(u8, temp.items.len);
+        std.mem.copyForwards(u8, rendered, temp.items);
+
+        try list.append(rendered);
+
+        return list.toOwnedSlice();
     }
 };
