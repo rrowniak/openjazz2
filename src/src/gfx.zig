@@ -1,5 +1,6 @@
 pub const sdl = @cImport({
     @cInclude("SDL3/SDL.h");
+    @cInclude("SDL3_ttf/SDL_ttf.h");
 });
 const std = @import("std");
 
@@ -9,8 +10,18 @@ var g_is_running = true;
 var g_screen_w: c_int = 1400;
 var g_screen_h: c_int = 800;
 
+var g_sdl_events: std.array_list.Managed(sdl.SDL_Event) = undefined;
+var g_alloc = std.heap.GeneralPurposeAllocator(.{}){};
+
+pub const EventHandlerFn = *const fn (ev: *const sdl.SDL_Event) void;
+var g_custom_ev_handler: ?EventHandlerFn = null;
+
 pub fn screen_res() struct {w: usize, h: usize} {
     return .{.w = @intCast(g_screen_w), .h = @intCast(g_screen_h)};
+}
+
+pub fn get_renderer() *sdl.SDL_Renderer {
+    return g_sdl_renderer.?;
 }
 
 pub fn init() !void {
@@ -18,6 +29,10 @@ pub fn init() !void {
         std.debug.print("SDL init failed: {s}\n", .{sdl.SDL_GetError()});
         return error.InitFailed;
     }
+
+    _ = sdl.TTF_Init();
+
+    g_sdl_events = .init(g_alloc.allocator());
 }
 
 pub fn init_window() void {
@@ -53,11 +68,17 @@ pub fn update_frame() void {
             sdl.SDL_EVENT_QUIT => g_is_running = false,
             else => {},
         }
+        g_sdl_events.append(sdl_event) catch {};
     }
+}
+
+pub fn get_events() []const sdl.SDL_Event {
+    return g_sdl_events.items[0..];
 }
 
 pub fn render() void {
     _ = sdl.SDL_RenderPresent(g_sdl_renderer);
+    g_sdl_events.clearRetainingCapacity();
 }
 
 pub const Sprite = struct {
@@ -224,6 +245,7 @@ pub fn clean_screen(r: f32, g: f32, b: f32) void {
 }
 
 pub fn deinit() void {
+    sdl.TTF_Quit();
     if (g_sdl_renderer != null) {
         sdl.SDL_DestroyRenderer(g_sdl_renderer);
     }
@@ -231,6 +253,8 @@ pub fn deinit() void {
         sdl.SDL_DestroyWindow(g_sdl_window);
     }
     sdl.SDL_Quit();
+
+    g_sdl_events.deinit();
 }
 
 fn test_audio(sample_rate: u32, data: []const u8) void {

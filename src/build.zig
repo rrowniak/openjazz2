@@ -30,6 +30,7 @@ pub fn build(b: *std.Build) void {
     // needed by SDL3 - otherwise segfault
     exe.linkLibC();
     exe.linkSystemLibrary("sdl3");
+    exe.linkSystemLibrary("SDL3_ttf");
 
     b.installArtifact(exe);
 
@@ -53,6 +54,7 @@ pub fn build(b: *std.Build) void {
     const test_files = [_][]const u8{
         "src/assets.zig",
         "src/assets_reader.zig",
+        "src/console.zig",
         "src/gfx.zig",
         // "src/main.zig",
         "src/utils.zig",

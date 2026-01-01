@@ -4,6 +4,8 @@ const assets = @import("assets.zig");
 const gfx = @import("gfx.zig");
 const asset_reader = @import("assets_reader.zig");
 const sdl = gfx.sdl;
+const console = @import("console.zig");
+
 /// Given a possibly case-wrong path, return the actual filename on disk.
 /// Returns an allocated string containing the corrected full path.
 /// Caller owns the memory.
@@ -60,6 +62,7 @@ pub const DiagLevel = struct {
     scr_w: u32,
     scr_h: u32,
     cam_pos: WorldCoord,
+    shell: console.Console,
 
     pub fn init(alloc: std.mem.Allocator, j2l_path: []const u8) !DiagLevel {
         const scr = gfx.screen_res();
@@ -77,6 +80,7 @@ pub const DiagLevel = struct {
             .scr_w = @intCast(scr.w),
             .scr_h = @intCast(scr.h),
             .cam_pos = .{.x = 1000, .y = 400},
+            .shell = try .init(alloc),
         };
     }
 
@@ -89,6 +93,7 @@ pub const DiagLevel = struct {
             }
         };
     }
+    
 
     fn update(ctx: *anyopaque) void {
         const self: *DiagLevel = @ptrCast(@alignCast(ctx));
@@ -133,16 +138,14 @@ pub const DiagLevel = struct {
                     // convert to the Screen Coord
                     const scr_coord = self.world_to_screen(tile_word); 
                     // render if on the screen
-                        // std.log.debug("Drawing {s}", .{"dd"});
                     if (scr_coord) |scr| {
-                        // std.log.debug("Drawing {s}", .{"dd"});
-                        // asset_tile.sprite.draw(100, 100);
-                        // _ = scr;
                         asset_tile.sprite.draw(scr.x, scr.y);
                     }
                 }
             }
         }
+        // render console
+        self.shell.render_shell();
     }
 
     fn deinit(ctx: *anyopaque) void {
@@ -150,6 +153,7 @@ pub const DiagLevel = struct {
 
         self.tileset.deinit();
         self.level.deinit();
+        self.shell.deinit();
     }
 
     fn handle_inputs(self: *DiagLevel) void {
@@ -166,6 +170,19 @@ pub const DiagLevel = struct {
         }
         if (keyboard[sdl.SDL_SCANCODE_DOWN]) {
             self.cam_pos.y += 1;
+        }
+
+        for (gfx.get_events()) |ev| {
+            switch (ev.type) {
+                sdl.SDL_EVENT_KEY_DOWN => {
+                    const key = ev.key;
+                    if (key.repeat) break;
+                    if (key.scancode == sdl.SDL_SCANCODE_GRAVE) {
+                        self.shell.toggle_onoff();
+                    }
+                },
+                else => {},
+            }
         }
     }
 
@@ -188,7 +205,7 @@ pub const DiagLevel = struct {
         const y1 = if (self.cam_pos.y <= h_2) 0 else self.cam_pos.y - h_2; 
         return .{
             .top_left = .{ .x = x1, .y = y1},
-            .bottom_right = .{.x = self.cam_pos.x + w_2, .y = self.cam_pos.y + h_2},
+            .bottom_right = .{.x = x1 + self.scr_w, .y = y1 + self.scr_h},
         };
     }
 
