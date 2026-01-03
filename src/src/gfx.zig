@@ -13,9 +13,6 @@ var g_screen_h: c_int = 800;
 var g_sdl_events: std.array_list.Managed(sdl.SDL_Event) = undefined;
 var g_alloc = std.heap.GeneralPurposeAllocator(.{}){};
 
-pub const EventHandlerFn = *const fn (ev: *const sdl.SDL_Event) void;
-var g_custom_ev_handler: ?EventHandlerFn = null;
-
 pub fn screen_res() struct {w: usize, h: usize} {
     return .{.w = @intCast(g_screen_w), .h = @intCast(g_screen_h)};
 }

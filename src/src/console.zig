@@ -2,16 +2,63 @@ const std = @import("std");
 const gfx = @import("gfx.zig");
 const sdl = gfx.sdl;
 
-pub const VarPtr = union(enum) {
-    usize_ptr: *usize,
+const Command = struct {
+    fun: CommandFn,
+    ctx: *anyopaque,
 };
+
+const CommandFn = *const fn (alloc: std.mem.Allocator, 
+    ctx: *anyopaque, 
+    args: []const u8) ?[]const u8;
 
 const FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf";
 const PROMPT = "jazz2> ";
 
+fn help(alloc: std.mem.Allocator, ctx: *anyopaque, args: []const u8) ?[]const u8 {
+    _ = args;
+    const self: *Console = @ptrCast(@alignCast(ctx));
+    _ = self;
+    return alloc.dupe(u8, "Help") catch { return null; };
+}
+
+const Lines = struct {
+    alloc: std.mem.Allocator,
+    lines: std.array_list.Managed([]const u8),
+    limit: usize = 255,
+
+    fn init(alloc: std.mem.Allocator) @This() {
+        return .{
+            .alloc = alloc,
+            .lines = .init(alloc),
+        };
+    }
+
+    fn deinit(self: *@This()) void {
+        for (self.lines.items) |l| {
+            self.alloc.free(l);
+        }
+        self.lines.deinit();
+    }
+
+    fn append_line(self: *@This(), line: []const u8) !void {
+        try self.lines.append(try self.alloc.dupe(u8, line));
+        self.maintain_limit();
+    }
+
+    fn maintain_limit(self: *@This()) void {
+        if (self.lines.items.len > self.limit) {
+            const remove = self.lines.items.len - self.limit;
+            for (0..remove) |_| {
+                const s = self.lines.orderedRemove(0);
+                self.alloc.free(s);
+            }
+        }
+    }
+};
+
 pub const Console = struct {
     alloc: std.mem.Allocator,
-    variables: std.StringHashMap(VarPtr),
+    commands: std.StringHashMap(Command),
     enabled: bool = false,
     // graphics
     rect: sdl.SDL_FRect = .{ .x= 0, .y = 0, .w = 800, .h = 600},
@@ -19,30 +66,30 @@ pub const Console = struct {
     font: *sdl.TTF_Font,
     line_height: f32 = 16,
     // lines
-    lines: std.array_list.Managed([]u8),
+    text: Lines,
     input: std.array_list.Managed(u8),
     cursor_visible: bool = true,
     last_blink_ms: u64 = 0,
 
     pub fn init(alloc: std.mem.Allocator) !@This() {
-        var lines = std.array_list.Managed([]u8).init(alloc);
-        try lines.append(try alloc.dupe(u8, "Jazz Jackrabbit 2 Console"));
-        try lines.append(try alloc.dupe(u8, "------------------------"));
-        return .{
+        var lines = Lines.init(alloc);
+        try lines.append_line("Jazz Jackrabbit 2 Console");
+        try lines.append_line("------------------------");
+        var c = @This() {
             .alloc = alloc,
-            .variables = .init(alloc),
+            .commands = .init(alloc),
             .font = sdl.TTF_OpenFont(FONT_PATH, 14) orelse return error.FontLoadFailed,
-            .lines = lines,
+            .text = lines,
             .input = .init(alloc),
         };
+        // register help command
+        c.register_cmd("help", help, &c);
+        return c;
     }
 
     pub fn deinit(self: *@This()) void {
-        self.variables.deinit();
-        for (self.lines.items) |l| {
-            self.alloc.free(l);
-        }
-        self.lines.deinit();
+        self.commands.deinit();
+        self.text.deinit();
         self.input.deinit();
     }
 
@@ -58,28 +105,9 @@ pub const Console = struct {
         }
     }
 
-    pub fn register(self: *@This(), name: []const u8, variable: anytype) void {
-        const T = @TypeOf(variable);
-        var value: ?VarPtr = null;
-        switch (@typeInfo(T)) {
-            .pointer => |ptr| {
-                if (ptr.sentinel() != null) 
-                    @compileError("Pointers sentinels are not supported.");
-                if (ptr.size == .slice)
-                    @compileError("Slices (" ++ @typeName(T) ++ ") are not supported.");
-                switch (ptr.child) {
-                    usize => value = .{.usize_ptr = variable },
-                    else => @compileError("Unuspportet pointer type " ++ @typeName(ptr.child)),
-                }
-            },
-            else => @compileError("Unsupported type " ++ @typeName(T)),
-        }
-
-        if (value) |v| {
-            if (self.variables.getOrPut(name)) |entry| {
-                entry.value_ptr.* = v;
-            }
-        }
+    pub fn register_cmd(self: *@This(), name: []const u8, cmd: CommandFn, ctx: *anyopaque) void {
+        var entry = self.commands.getOrPut(name) catch { return; };
+        entry.value_ptr.* = .{ .fun = cmd, .ctx = ctx };
     }
 
     pub fn render_shell(self: *@This()) void {
@@ -156,7 +184,7 @@ pub const Console = struct {
         self.render_runtime();
     }
 
-    pub fn render_runtime(self: @This()) void {
+    fn render_runtime(self: @This()) void {
         _ = self;
     }
     
@@ -197,14 +225,29 @@ pub const Console = struct {
 
         const line = self.alloc.alloc(u8, self.input.items.len + PROMPT.len)
             catch return;
+        defer self.alloc.free(line);
 
-        // std.mem.copyForwards(u8, line, self.input.items);
-        // std.mem.copyForwards(u8, line, self.input.items);
         @memcpy(line[0..PROMPT.len], PROMPT);
         @memcpy(line[PROMPT.len..], self.input.items);
 
-        self.lines.append(line) catch {};
+        self.text.append_line(line) catch {};
+        self.execute_command();
         self.input.clearRetainingCapacity();
+    }
+
+    fn execute_command(self: *@This()) void {
+        var it = std.mem.tokenizeScalar(u8, self.input.items, ' ');
+        if (it.next()) |cmd| {
+            if (self.commands.getEntry(cmd)) |c| {
+                const r = c.value_ptr.fun(self.alloc, c.value_ptr.ctx, self.input.items);
+                if (r) |s| {
+                    defer self.alloc.free(s);
+                    self.text.append_line(s) catch {};
+                }
+            } else {
+                self.text.append_line("Unknown command") catch {};
+            }
+        }
     }
 
     fn update_cursor(self: *@This()) void {
@@ -221,7 +264,7 @@ pub const Console = struct {
         var list = std.array_list.Managed([]const u8).init(self.alloc);
 
         // history
-        for (self.lines.items) |line| {
+        for (self.text.lines.items) |line| {
             try list.append(try self.alloc.dupe(u8, line));
         }
 
