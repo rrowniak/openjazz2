@@ -216,7 +216,7 @@ pub const LayerFlags = packed struct {
 
 pub const TileId = union(enum) {
     static_tile: usize, // points to Tileset.tiles[id]
-    anim_tile: usize, // points to Animset.blocks[id]
+    anim_tile: usize, // points to animated_tiles then to the tileset 
 };
 
 pub const LayerTile = struct {
@@ -239,6 +239,7 @@ pub const Level = struct {
     // secret_level_name: []u8,
     // music_file_name: []u8,
     layers: [8]Layer,
+    animated_tiles: []@import("assets_reader.zig").AnimatedTile,
 
     pub fn deinit(self: *Level) void {
 
@@ -250,5 +251,6 @@ pub const Level = struct {
                 self.alloc.free(t);
             }  
         }
+        self.alloc.free(self.animated_tiles);
     }
 };

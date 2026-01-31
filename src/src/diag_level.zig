@@ -28,13 +28,18 @@ pub const DiagLevel = struct {
         const tileset_path = try utils.find_file_case_insensitive(alloc, dir, std.mem.sliceTo(&level.tileset_name, 0));
         defer alloc.free(tileset_path);
         const tileset: assets.Tileset = try asset_reader.load_tileset(alloc, tileset_path);
-        return .{ 
+        // load animsets
+        const animset_path = try utils.find_file_case_insensitive(alloc, dir, "Anims.j2a");
+        defer alloc.free(animset_path);
+        const animset = try asset_reader.load_animset(alloc, animset_path);
+        return .{
             .allocator = alloc,
-            .level = level, 
+            .level = level,
             .tileset = tileset,
+            .animset = animset,
             .scr_w = @intCast(scr.w),
             .scr_h = @intCast(scr.h),
-            .cam_pos = .{.x = 1000, .y = 400},
+            .cam_pos = .{ .x = 1000, .y = 400 },
             .shell = try .init(alloc),
         };
     }
@@ -44,22 +49,18 @@ pub const DiagLevel = struct {
         // at this point the address of the DiagLevel
         // should be fixed
         self.shell.register_cmd("show", show_cmd, self);
-        
-        return .{
-            .ptr = self,
-            .vtable = &.{
-                .update = update,
-                .deinit = deinit,
-            }
-        };
+
+        return .{ .ptr = self, .vtable = &.{
+            .update = update,
+            .deinit = deinit,
+        } };
     }
-    
 
     fn update(ctx: *anyopaque) void {
         const self: *DiagLevel = @ptrCast(@alignCast(ctx));
 
         self.clear_screen();
-        self.handle_inputs(); 
+        self.handle_inputs();
         // Coordinate system transformations
         // 1. cam_pos to visible rectangle in WorldCoord
         const visible_rect = self.cam_to_world_rect();
@@ -74,7 +75,7 @@ pub const DiagLevel = struct {
             if (num != 3) {
                 continue;
             }
-            
+
             for (tile_top_left.y..tile_bottom_right.y) |y| {
                 if (y >= layer.tiles.?.len) {
                     break;
@@ -82,25 +83,25 @@ pub const DiagLevel = struct {
                 for (tile_top_left.x..tile_bottom_right.x) |x| {
                     if (x >= layer.tiles.?[y].len) {
                         break;
-                    } 
+                    }
                     const lev_tile = layer.tiles.?[y][x].?;
                     // convert back to the WorldCoord
-                    const tile_word = WorldCoord {
-                            .x = @intCast(x * TileCoord.SIZE),
-                            .y = @intCast(y * TileCoord.SIZE)
-                    };
+                    const tile_word = WorldCoord{ .x = @intCast(x * TileCoord.SIZE), .y = @intCast(y * TileCoord.SIZE) };
                     // convert to the Screen Coord
-                    const scr_coord = self.world_to_screen(tile_word); 
+                    const scr_coord = self.world_to_screen(tile_word);
                     // render if on the screen
                     if (scr_coord) |scr| {
                         const idd = lev_tile.id;
-                        switch (idd) {
-                            assets.TileId.static_tile => |id| {
-                                const asset_tile = self.tileset.tiles[id];
-                                asset_tile.sprite.draw_i32(scr.x, scr.y);
+                        const asset_tile = switch (idd) {
+                            assets.TileId.static_tile => |id| blk: {
+                                break :blk self.tileset.tiles[id];
                             },
-                            assets.TileId.anim_tile => {},
-                        }
+                            assets.TileId.anim_tile => |id| blk: {
+                                const frame_id = self.level.animated_tiles[id].frames[0];
+                                break :blk self.tileset.tiles[frame_id];
+                            },
+                        };
+                        asset_tile.sprite.draw_i32(scr.x, scr.y);
                     }
                 }
             }
@@ -113,6 +114,7 @@ pub const DiagLevel = struct {
         const self: *DiagLevel = @ptrCast(@alignCast(ctx));
 
         self.tileset.deinit();
+        self.animset.deinit();
         self.level.deinit();
         self.shell.deinit();
     }
@@ -160,15 +162,14 @@ pub const DiagLevel = struct {
         gfx.clean_screen(red, green, blue);
     }
 
-    fn cam_to_world_rect(self: *DiagLevel) 
-        struct {top_left: WorldCoord, bottom_right: WorldCoord} {
+    fn cam_to_world_rect(self: *DiagLevel) struct { top_left: WorldCoord, bottom_right: WorldCoord } {
         const w_2 = self.scr_w / 2;
         const h_2 = self.scr_h / 2;
-        const x1 = if (self.cam_pos.x <= w_2) 0 else self.cam_pos.x - w_2; 
-        const y1 = if (self.cam_pos.y <= h_2) 0 else self.cam_pos.y - h_2; 
+        const x1 = if (self.cam_pos.x <= w_2) 0 else self.cam_pos.x - w_2;
+        const y1 = if (self.cam_pos.y <= h_2) 0 else self.cam_pos.y - h_2;
         return .{
-            .top_left = .{ .x = x1, .y = y1},
-            .bottom_right = .{.x = x1 + self.scr_w, .y = y1 + self.scr_h},
+            .top_left = .{ .x = x1, .y = y1 },
+            .bottom_right = .{ .x = x1 + self.scr_w, .y = y1 + self.scr_h },
         };
     }
 
@@ -179,14 +180,14 @@ pub const DiagLevel = struct {
         const cy = self.cam_pos.y;
 
         const offset_x = if (cx < w_2) 0 else cx - w_2;
-        
+
         const offset_y = if (cy < h_2) 0 else cy - h_2;
 
         // if (offset_x > world.x or offset_y > world.y) {
         //     return null;
         // }
-        
-        return ScreenCoord {
+
+        return ScreenCoord{
             .x = @as(i32, @intCast(world.x)) - @as(i32, @intCast(offset_x)),
             .y = @as(i32, @intCast(world.y)) - @as(i32, @intCast(offset_y)),
         };
@@ -198,24 +199,29 @@ fn show_cmd(alloc: std.mem.Allocator, ctx: *anyopaque, args: []const u8) ?[]cons
     var it = std.mem.tokenizeScalar(u8, args, ' ');
     _ = it.next();
     const subcmd = it.next() orelse {
-        return alloc.dupe(u8, "Missing command argument") catch { return null; };
-    }; 
+        return alloc.dupe(u8, "Missing command argument") catch {
+            return null;
+        };
+    };
 
     if (std.mem.eql(u8, subcmd, "cam_pos")) {
-        return std.fmt.allocPrint(alloc, "x={d} y={d}", .{self.cam_pos.x, self.cam_pos.y}) catch { return null; };
+        return std.fmt.allocPrint(alloc, "x={d} y={d}", .{ self.cam_pos.x, self.cam_pos.y }) catch {
+            return null;
+        };
     }
 
-    return std.fmt.allocPrint(alloc, "Unsupported `{s}` argument", .{subcmd})
-        catch { return null; };
+    return std.fmt.allocPrint(alloc, "Unsupported `{s}` argument", .{subcmd}) catch {
+        return null;
+    };
 }
 
 test "Coord transformations" {
     // World to Tile
-    const w2t_tc = [_]struct {w: WorldCoord, exp: TileCoord} {
-        .{.w = .{.x = 0, .y = 0}, .exp = .{.x = 0, .y = 0 }},
-        .{.w = .{.x = 32, .y = 32}, .exp = .{.x = 1, .y = 1 }},
-        .{.w = .{.x = 64, .y = 64}, .exp = .{.x = 2, .y = 2 }},
-        .{.w = .{.x = 50, .y = 66}, .exp = .{.x = 1, .y = 2 }},
+    const w2t_tc = [_]struct { w: WorldCoord, exp: TileCoord }{
+        .{ .w = .{ .x = 0, .y = 0 }, .exp = .{ .x = 0, .y = 0 } },
+        .{ .w = .{ .x = 32, .y = 32 }, .exp = .{ .x = 1, .y = 1 } },
+        .{ .w = .{ .x = 64, .y = 64 }, .exp = .{ .x = 2, .y = 2 } },
+        .{ .w = .{ .x = 50, .y = 66 }, .exp = .{ .x = 1, .y = 2 } },
     };
 
     for (w2t_tc) |tc| {

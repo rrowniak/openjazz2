@@ -7,9 +7,7 @@ const Command = struct {
     ctx: *anyopaque,
 };
 
-const CommandFn = *const fn (alloc: std.mem.Allocator, 
-    ctx: *anyopaque, 
-    args: []const u8) ?[]const u8;
+const CommandFn = *const fn (alloc: std.mem.Allocator, ctx: *anyopaque, args: []const u8) ?[]const u8;
 
 const FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf";
 const PROMPT = "jazz2> ";
@@ -18,7 +16,9 @@ fn help(alloc: std.mem.Allocator, ctx: *anyopaque, args: []const u8) ?[]const u8
     _ = args;
     const self: *Console = @ptrCast(@alignCast(ctx));
     _ = self;
-    return alloc.dupe(u8, "Help") catch { return null; };
+    return alloc.dupe(u8, "Help") catch {
+        return null;
+    };
 }
 
 const Lines = struct {
@@ -61,7 +61,7 @@ pub const Console = struct {
     commands: std.StringHashMap(Command),
     enabled: bool = false,
     // graphics
-    rect: sdl.SDL_FRect = .{ .x= 0, .y = 0, .w = 800, .h = 600},
+    rect: sdl.SDL_FRect = .{ .x = 0, .y = 0, .w = 800, .h = 600 },
     bg_color: sdl.SDL_Color = .{ .r = 0, .g = 0, .b = 0, .a = 200 },
     font: *sdl.TTF_Font,
     line_height: f32 = 16,
@@ -75,7 +75,7 @@ pub const Console = struct {
         var lines = Lines.init(alloc);
         try lines.append_line("Jazz Jackrabbit 2 Console");
         try lines.append_line("------------------------");
-        var c = @This() {
+        var c = @This(){
             .alloc = alloc,
             .commands = .init(alloc),
             .font = sdl.TTF_OpenFont(FONT_PATH, 14) orelse return error.FontLoadFailed,
@@ -106,7 +106,9 @@ pub const Console = struct {
     }
 
     pub fn register_cmd(self: *@This(), name: []const u8, cmd: CommandFn, ctx: *anyopaque) void {
-        var entry = self.commands.getOrPut(name) catch { return; };
+        var entry = self.commands.getOrPut(name) catch {
+            return;
+        };
         entry.value_ptr.* = .{ .fun = cmd, .ctx = ctx };
     }
 
@@ -131,7 +133,9 @@ pub const Console = struct {
             // render shell text
             const text_color = sdl.SDL_Color{ .r = 255, .g = 255, .b = 255, .a = 255 };
 
-            const render_lines = self.build_render_lines() catch {return;};
+            const render_lines = self.build_render_lines() catch {
+                return;
+            };
             defer {
                 for (render_lines) |l| self.alloc.free(l);
                 self.alloc.free(render_lines);
@@ -154,8 +158,7 @@ pub const Console = struct {
 
                 defer sdl.SDL_DestroySurface(surface);
 
-                const texture = sdl.SDL_CreateTextureFromSurface(gfx.get_renderer(), surface)
-                    orelse continue;
+                const texture = sdl.SDL_CreateTextureFromSurface(gfx.get_renderer(), surface) orelse continue;
                 defer sdl.SDL_DestroyTexture(texture);
 
                 const dst = sdl.SDL_FRect{
@@ -187,7 +190,7 @@ pub const Console = struct {
     fn render_runtime(self: @This()) void {
         _ = self;
     }
-    
+
     fn handle_event(self: *@This(), event: *const sdl.SDL_Event) void {
         switch (event.type) {
             sdl.SDL_EVENT_TEXT_INPUT => {
@@ -206,8 +209,7 @@ pub const Console = struct {
                         }
                     },
 
-                    sdl.SDL_SCANCODE_RETURN,
-                    sdl.SDL_SCANCODE_KP_ENTER => {
+                    sdl.SDL_SCANCODE_RETURN, sdl.SDL_SCANCODE_KP_ENTER => {
                         self.submit_line();
                     },
 
@@ -223,8 +225,7 @@ pub const Console = struct {
         if (self.input.items.len == 0)
             return;
 
-        const line = self.alloc.alloc(u8, self.input.items.len + PROMPT.len)
-            catch return;
+        const line = self.alloc.alloc(u8, self.input.items.len + PROMPT.len) catch return;
         defer self.alloc.free(line);
 
         @memcpy(line[0..PROMPT.len], PROMPT);

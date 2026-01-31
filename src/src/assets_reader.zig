@@ -526,11 +526,11 @@ const LevelInfo = struct {
         allocator.free(self.tile_flipped);
         allocator.free(self.tile_types);
         allocator.free(self.tile_x_mask);
-        allocator.free(self.animated_tiles);
+        // allocator.free(self.animated_tiles);
     }
 };
 
-const AnimatedTile = struct {
+pub const AnimatedTile = struct {
     delay: u16, // frame wait
     delay_jitter: u16,
     reverse_delay: u16,
@@ -665,6 +665,7 @@ pub fn load_level(allocator: std.mem.Allocator, path: []const u8) !assets.Level 
         .alloc = allocator,
         .tileset_name = lev_info.tileset,
         .layers = layers,
+        .animated_tiles = lev_info.animated_tiles,
     };
 
     return ret;

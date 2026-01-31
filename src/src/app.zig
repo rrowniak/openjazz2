@@ -5,8 +5,8 @@ pub const IApp = struct {
     vtable: *const VTable,
 
     pub const VTable = struct {
-        update: *const fn(*anyopaque) void,
-        deinit: *const fn(*anyopaque) void,
+        update: *const fn (*anyopaque) void,
+        deinit: *const fn (*anyopaque) void,
     };
 
     pub fn update(self: *IApp) void {
