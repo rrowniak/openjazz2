@@ -629,8 +629,12 @@ pub fn load_level(allocator: std.mem.Allocator, path: []const u8) !assets.Level 
                             id = id & tile_mask;
                         }
 
+                        const lid: assets.TileId = if (id < lev_info.anim_offset) 
+                            .{.static_tile = id} 
+                            else .{.anim_tile = id - lev_info.anim_offset};
+
                         layers[layer_num].tiles.?[y][x + j] = .{
-                            .id = id,
+                            .id = lid,
                             .flip_x = flip_x,
                             .flip_y = flip_y,
                         };

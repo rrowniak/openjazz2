@@ -214,8 +214,13 @@ pub const LayerFlags = packed struct {
     parallax_stars: bool,
 };
 
+pub const TileId = union(enum) {
+    static_tile: usize, // points to Tileset.tiles[id]
+    anim_tile: usize, // points to Animset.blocks[id]
+};
+
 pub const LayerTile = struct {
-    id: usize,
+    id: TileId,
     flip_x: bool,
     flip_y: bool,
 };

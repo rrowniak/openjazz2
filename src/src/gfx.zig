@@ -122,6 +122,18 @@ pub const Sprite = struct {
         _ = sdl.SDL_RenderTexture(g_sdl_renderer, self.texture, null, &dst);
     }
 
+    pub fn draw_i32(self: Sprite, x: i32, y: i32) void {
+
+        const dst: sdl.SDL_FRect = .{
+            .x =  @floatFromInt(x),
+            .y = @floatFromInt(y),
+            .w = @floatFromInt(self.w),
+            .h = @floatFromInt(self.h),
+        };
+        _ = sdl.SDL_RenderTexture(g_sdl_renderer, self.texture, null, &dst);
+    }
+
+
     pub fn deinit(self: Sprite) void {
         sdl.SDL_DestroyTexture(self.texture);
     }

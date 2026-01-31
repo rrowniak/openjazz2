@@ -60,6 +60,8 @@ pub fn build(b: *std.Build) void {
         "src/utils.zig",
         "src/diag_level.zig",
         "src/easy_bit.zig",
+        "src/g_math.zig",
+        "src/g_anim.zig",
     };
 
 

@@ -5,60 +5,17 @@ const gfx = @import("gfx.zig");
 const asset_reader = @import("assets_reader.zig");
 const sdl = gfx.sdl;
 const console = @import("console.zig");
-
-/// Given a possibly case-wrong path, return the actual filename on disk.
-/// Returns an allocated string containing the corrected full path.
-/// Caller owns the memory.
-pub fn find_file_case_insensitive(
-    allocator: std.mem.Allocator,
-    dirname: []const u8,
-    wanted_name: []const u8,
-) ![]u8 {
-    var dir = try std.fs.cwd().openDir(dirname, .{ .iterate = true });
-    defer dir.close();
-
-    var it = dir.iterate();
-    while (try it.next()) |entry| {
-        if (std.ascii.eqlIgnoreCase(entry.name, wanted_name)) {
-            // Return full corrected path (dir + real filename)
-            return try std.fs.path.join(
-                allocator,
-                &[_][]const u8{ dirname, entry.name },
-            );
-        }
-    }
-
-    return error.FileNotFound;
-}
-
-const TileCoord = struct {
-    const SIZE: usize = 32;
-    // usize types because `x` and `y` are indices of array
-    x: usize,
-    y: usize,
-
-    fn init_from_world(world: WorldCoord) TileCoord {
-        return .{ 
-            .x = @as(usize, @intCast(world.x)) / TileCoord.SIZE,
-            .y = @as(usize, @intCast(world.y)) / TileCoord.SIZE,
-        };
-    }
-};
-
-const ScreenCoord = struct {
-    x: u32,
-    y: u32,
-};
-
-const WorldCoord = struct {
-    x: u32,
-    y: u32,
-};
+const utils = @import("utils.zig");
+const m = @import("g_math.zig");
+const WorldCoord = m.WorldCoord;
+const TileCoord = m.TileCoord;
+const ScreenCoord = m.ScreenCoord;
 
 pub const DiagLevel = struct {
     allocator: std.mem.Allocator,
     level: assets.Level,
     tileset: assets.Tileset,
+    animset: assets.Animset,
     scr_w: u32,
     scr_h: u32,
     cam_pos: WorldCoord,
@@ -68,11 +25,9 @@ pub const DiagLevel = struct {
         const scr = gfx.screen_res();
         var level: assets.Level = try asset_reader.load_level(alloc, j2l_path);
         const dir = std.fs.path.dirname(j2l_path) orelse "";
-        const tileset_path = try find_file_case_insensitive(alloc, dir, std.mem.sliceTo(&level.tileset_name, 0));
+        const tileset_path = try utils.find_file_case_insensitive(alloc, dir, std.mem.sliceTo(&level.tileset_name, 0));
         defer alloc.free(tileset_path);
         const tileset: assets.Tileset = try asset_reader.load_tileset(alloc, tileset_path);
-        // std.log.debug("---> {any}\n", .{level});
-        // std.log.debug("tileset = {s}", .{level.tileset_name});
         return .{ 
             .allocator = alloc,
             .level = level, 
@@ -85,6 +40,11 @@ pub const DiagLevel = struct {
     }
 
     pub fn app_cast(self: *DiagLevel) app.IApp {
+        // register shell commands
+        // at this point the address of the DiagLevel
+        // should be fixed
+        self.shell.register_cmd("show", show_cmd, self);
+        
         return .{
             .ptr = self,
             .vtable = &.{
@@ -104,8 +64,8 @@ pub const DiagLevel = struct {
         // 1. cam_pos to visible rectangle in WorldCoord
         const visible_rect = self.cam_to_world_rect();
         // 2. Visible rectangle in WorldCoord to TileCoord
-        const tile_top_left = TileCoord.init_from_world(visible_rect.top_left);
-        const tile_bottom_right = TileCoord.init_from_world(visible_rect.bottom_right);
+        const tile_top_left = TileCoord.init_from_world_tl(visible_rect.top_left);
+        const tile_bottom_right = TileCoord.init_from_world_br(visible_rect.bottom_right);
         // 3. for each tile in the rectangle:
         for (self.level.layers, 0..) |layer, num| {
             if (layer.tiles == null) {
@@ -124,12 +84,6 @@ pub const DiagLevel = struct {
                         break;
                     } 
                     const lev_tile = layer.tiles.?[y][x].?;
-                    const id = lev_tile.id;
-                    if (id >= self.tileset.tiles.len) {
-                        // TODO: Fix this case
-                        continue;
-                    }
-                    const asset_tile = self.tileset.tiles[id];
                     // convert back to the WorldCoord
                     const tile_word = WorldCoord {
                             .x = @intCast(x * TileCoord.SIZE),
@@ -139,7 +93,14 @@ pub const DiagLevel = struct {
                     const scr_coord = self.world_to_screen(tile_word); 
                     // render if on the screen
                     if (scr_coord) |scr| {
-                        asset_tile.sprite.draw(scr.x, scr.y);
+                        const idd = lev_tile.id;
+                        switch (idd) {
+                            assets.TileId.static_tile => |id| {
+                                const asset_tile = self.tileset.tiles[id];
+                                asset_tile.sprite.draw_i32(scr.x, scr.y);
+                            },
+                            assets.TileId.anim_tile => {},
+                        }
                     }
                 }
             }
@@ -157,15 +118,17 @@ pub const DiagLevel = struct {
     }
 
     fn handle_inputs(self: *DiagLevel) void {
+        const cam_pos_x_min = self.scr_w / 2;
+        const cam_pos_y_min = self.scr_h / 2;
         const keyboard = sdl.SDL_GetKeyboardState(null);
 
-        if (keyboard[sdl.SDL_SCANCODE_LEFT] and self.cam_pos.x > 0) {
+        if (keyboard[sdl.SDL_SCANCODE_LEFT] and self.cam_pos.x > cam_pos_x_min) {
             self.cam_pos.x -= 1;
         }
         if (keyboard[sdl.SDL_SCANCODE_RIGHT]) {
             self.cam_pos.x += 1;
         }
-        if (keyboard[sdl.SDL_SCANCODE_UP] and self.cam_pos.y > 0) {
+        if (keyboard[sdl.SDL_SCANCODE_UP] and self.cam_pos.y > cam_pos_y_min) {
             self.cam_pos.y -= 1;
         }
         if (keyboard[sdl.SDL_SCANCODE_DOWN]) {
@@ -219,16 +182,32 @@ pub const DiagLevel = struct {
         
         const offset_y = if (cy < h_2) 0 else cy - h_2;
 
-        if (offset_x > world.x or offset_y > world.y) {
-            return null;
-        }
+        // if (offset_x > world.x or offset_y > world.y) {
+        //     return null;
+        // }
         
         return ScreenCoord {
-            .x = world.x - offset_x,
-            .y = world.y - offset_y,
+            .x = @as(i32, @intCast(world.x)) - @as(i32, @intCast(offset_x)),
+            .y = @as(i32, @intCast(world.y)) - @as(i32, @intCast(offset_y)),
         };
     }
 };
+
+fn show_cmd(alloc: std.mem.Allocator, ctx: *anyopaque, args: []const u8) ?[]const u8 {
+    const self: *DiagLevel = @ptrCast(@alignCast(ctx));
+    var it = std.mem.tokenizeScalar(u8, args, ' ');
+    _ = it.next();
+    const subcmd = it.next() orelse {
+        return alloc.dupe(u8, "Missing command argument") catch { return null; };
+    }; 
+
+    if (std.mem.eql(u8, subcmd, "cam_pos")) {
+        return std.fmt.allocPrint(alloc, "x={d} y={d}", .{self.cam_pos.x, self.cam_pos.y}) catch { return null; };
+    }
+
+    return std.fmt.allocPrint(alloc, "Unsupported `{s}` argument", .{subcmd})
+        catch { return null; };
+}
 
 test "Coord transformations" {
     // World to Tile
