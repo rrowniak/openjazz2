@@ -173,10 +173,15 @@ pub const IndexedSprite = struct {
         var colors: [256]sdl.SDL_Color = undefined;
         for (palette, 0..) |c, i| {
             // colors[i] = c;
-            colors[i].r = @intCast((c >> 24) & 0xff);
-            colors[i].g = @intCast((c >> 16) & 0xff);
-            colors[i].b = @intCast((c >> 8) & 0xff);
-            colors[i].a = @intCast(c & 0xff);
+            colors[i].g = @intCast((c >> 24) & 0xff);
+            colors[i].b = @intCast((c >> 16) & 0xff);
+            colors[i].g = @intCast((c >> 8) & 0xff);
+            colors[i].r = @intCast(c & 0xff);
+            colors[i].a = if (i == 0) 0 else 255;
+            // colors[i].r = @intCast((c >> 24) & 0xff);
+            // colors[i].g = @intCast((c >> 16) & 0xff);
+            // colors[i].b = @intCast((c >> 8) & 0xff);
+            // colors[i].a = @intCast(c & 0xff);
         }
 
         if (!sdl.SDL_SetPaletteColors(pal, &colors, 0, 256)) return error.PaletteSetFailed;

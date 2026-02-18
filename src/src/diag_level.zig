@@ -128,6 +128,7 @@ pub const DiagLevel = struct {
                             // std.debug.print("Try Draw {s}", .{"event"});
                             if (asset_maps.event2animsetinxd(ev.id)) |anim| {
                                 const a = &self.animset_conv.blocks[anim.animblock][anim.anim];
+                                a.set_frame(time_elapsed);
                                 a.draw(scr.x, scr.y);
                                 // std.debug.print("Draw {s}", .{"event"});
                             }

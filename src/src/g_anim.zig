@@ -35,10 +35,11 @@ pub const Animation = struct {
     anim_index: usize,
     curr_fr_indx: usize,
     frame_sprites: []gfx.Sprite,
+    frame_rate: u16,
 
     pub fn init(allocator: std.mem.Allocator, animset: *const assets.Animset, block_index: usize, anim_index: usize, palette: [256]u32) !Animation {
         const anim: *assets.Anim = &animset.*.blocks[block_index].anims[anim_index];
-        const ret: Animation = .{ .block_index = block_index, .anim_index = anim_index, .curr_fr_indx = 0, .frame_sprites = try allocator.alloc(gfx.Sprite, anim.frames.len) };
+        const ret: Animation = .{ .block_index = block_index, .anim_index = anim_index, .curr_fr_indx = 0, .frame_sprites = try allocator.alloc(gfx.Sprite, anim.frames.len), .frame_rate = anim.frame_rate };
         for (0..anim.frames.len) |i| {
             try anim.frames[i].sprite.set_palette(palette);
             ret.frame_sprites[i] = try anim.frames[i].sprite.to_sprite();
@@ -48,6 +49,20 @@ pub const Animation = struct {
 
     pub fn draw(self: *Animation, x: i32, y: i32) void {
         self.frame_sprites[self.curr_fr_indx].draw(x, y);
+    }
+
+    pub fn set_frame(self: *Animation, time_elapsed: f32) void {
+        const ttimef = @as(f32, @floatFromInt(self.frame_rate)) * time_elapsed;
+        const ttimei = @as(usize, @intFromFloat(@round(ttimef)));
+        // if (anim.is_ping_pong) {
+        //     frame_no = ttimei % (anim.frame_count * 2 - 2);
+        //     if (frame_no >= anim.frame_count) {
+        //         frame_no = (2 * anim.frame_count) - frame_no - 1;
+        //     }
+        // } else {
+            const frame_no = ttimei % self.frame_sprites.len;
+        // }
+        self.curr_fr_indx = frame_no;
     }
 
     pub fn next_frame(self: *Animation) void {
