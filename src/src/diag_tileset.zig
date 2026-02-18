@@ -48,7 +48,7 @@ pub const DiagTileset = struct {
                     y = 0;
                 }
             }
-            t.sprite.draw(x, y);
+            t.sprite.draw(@intCast(x), @intCast(y));
             x += t.sprite.w;
         }
     }

@@ -76,7 +76,7 @@ pub const DiagAnimset = struct {
                 max_h = 0;
                 x = 0;
             }
-            a.*.draw(x, y);
+            a.*.draw(@intCast(x), @intCast(y));
 
             x += dim.w;
 

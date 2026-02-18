@@ -111,7 +111,7 @@ pub const Sprite = struct {
         return r;
     }
 
-    pub fn draw(self: Sprite, x: usize, y: usize) void {
+    pub fn draw(self: Sprite, x: i32, y: i32) void {
 
         const dst: sdl.SDL_FRect = .{
             .x =  @floatFromInt(x),

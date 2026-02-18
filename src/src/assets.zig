@@ -1,4 +1,5 @@
 const std = @import("std");
+const maps = @import("assets_maps.zig");
 const gfx = @import("gfx.zig");
 
 pub const JJ2Version = enum(u16) {
@@ -204,6 +205,13 @@ pub const Animset = struct {
     }
 };
 
+pub const AnimsetIndex = struct {animblock: usize, anim: usize};
+
+// Events
+//
+pub const Event = struct {
+    id: maps.EventId,
+};
 // Level
 //
 pub const LayerFlags = packed struct {
@@ -225,9 +233,11 @@ pub const LayerTile = struct {
     flip_y: bool,
 };
 
+pub const Cell = struct { tile: ?LayerTile, event: ?Event};
+
 pub const Layer = struct {
     // flags: LayerFlags,
-    tiles: ?[][]?LayerTile,
+    cells: ?[][]Cell,
 };
 
 pub const Level = struct {
@@ -244,7 +254,7 @@ pub const Level = struct {
     pub fn deinit(self: *Level) void {
 
         for (&self.layers) |*l| {
-            if (l.tiles) |t| {
+            if (l.cells) |t| {
                 for (t) |tt| {
                     self.alloc.free(tt);
                 }

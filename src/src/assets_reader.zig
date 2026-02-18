@@ -598,13 +598,13 @@ pub fn load_level(allocator: std.mem.Allocator, path: []const u8) !assets.Level 
         // layers[layer_num].flags = assets.LayerFlags{};
         if (lev_info.layer_main[layer_num]) {
             const size_y: usize = @intCast(lev_info.layer_height[layer_num]);
-            layers[layer_num].tiles = try allocator.alloc([]?assets.LayerTile, size_y);
+            layers[layer_num].cells = try allocator.alloc([]assets.Cell, size_y);
             for (0..size_y) |y| {
                 const size_x = @as(usize, @intCast(
                         @divExact(lev_info.layer_internal_width[layer_num],  4)
                     )
                 );
-                layers[layer_num].tiles.?[y] = try allocator.alloc(?assets.LayerTile, size_x * 4);
+                layers[layer_num].cells.?[y] = try allocator.alloc(assets.Cell, size_x * 4);
                 var x: usize = 0;
                 while (x < lev_info.layer_internal_width[layer_num]) : (x += 4) {
                     const dict_id = try easy_bit.read(u16, &r_layout);
@@ -633,7 +633,7 @@ pub fn load_level(allocator: std.mem.Allocator, path: []const u8) !assets.Level 
                             .{.static_tile = id} 
                             else .{.anim_tile = id - lev_info.anim_offset};
 
-                        layers[layer_num].tiles.?[y][x + j] = .{
+                        layers[layer_num].cells.?[y][x + j].tile = .{
                             .id = lid,
                             .flip_x = flip_x,
                             .flip_y = flip_y,
@@ -641,8 +641,21 @@ pub fn load_level(allocator: std.mem.Allocator, path: []const u8) !assets.Level 
                     }
                 }
             }
+            // load events
+            // const size_x: usize = @intCast(lev_info.layer_width[layer_num]);
+            if (layer_num == 3) {
+            for (0..size_y) |y| {
+                const size_x = @as(usize, @intCast(lev_info.layer_width[layer_num]));
+                // const size_x = layers[layer_num].cells.?[y].len;
+                for (0..size_x) |x| {
+                    const indx = y * size_x + x;
+                    const ev_raw = events[indx]; 
+                    layers[layer_num].cells.?[y][x].event = parse_event(ev_raw);
+                }
+            }
+            }
         } else {
-            layers[layer_num].tiles = null;
+            layers[layer_num].cells = null;
         }
     }
 
@@ -669,6 +682,14 @@ pub fn load_level(allocator: std.mem.Allocator, path: []const u8) !assets.Level 
     };
 
     return ret;
+}
+
+fn parse_event(ev_raw: u32) ?assets.Event {
+    const id: u8 = @intCast(ev_raw & 0xFF);
+    if (id == 0) {
+        return null;
+    }
+    return .{.id = @enumFromInt(id)};
 }
 
 const TEST_DATA_TILES = "test_data1/v123";

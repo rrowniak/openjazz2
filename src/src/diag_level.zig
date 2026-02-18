@@ -3,10 +3,12 @@ const app = @import("app.zig");
 const assets = @import("assets.zig");
 const gfx = @import("gfx.zig");
 const asset_reader = @import("assets_reader.zig");
+const asset_maps = @import("assets_maps.zig");
 const sdl = gfx.sdl;
 const console = @import("console.zig");
 const utils = @import("utils.zig");
 const m = @import("g_math.zig");
+const g_anim = @import("g_anim.zig");
 const WorldCoord = m.WorldCoord;
 const TileCoord = m.TileCoord;
 const ScreenCoord = m.ScreenCoord;
@@ -16,6 +18,7 @@ pub const DiagLevel = struct {
     level: assets.Level,
     tileset: assets.Tileset,
     animset: assets.Animset,
+    animset_conv: g_anim.ConvertedAnimset,
     scr_w: u32,
     scr_h: u32,
     cam_pos: WorldCoord,
@@ -32,11 +35,13 @@ pub const DiagLevel = struct {
         const animset_path = try utils.find_file_case_insensitive(alloc, dir, "Anims.j2a");
         defer alloc.free(animset_path);
         const animset = try asset_reader.load_animset(alloc, animset_path);
+        const animset_conv = try g_anim.ConvertedAnimset.init(alloc, &animset, tileset.palette);
         return .{
             .allocator = alloc,
             .level = level,
             .tileset = tileset,
             .animset = animset,
+            .animset_conv = animset_conv,
             .scr_w = @intCast(scr.w),
             .scr_h = @intCast(scr.h),
             .cam_pos = .{ .x = 1000, .y = 400 },
@@ -59,6 +64,8 @@ pub const DiagLevel = struct {
     fn update(ctx: *anyopaque) void {
         const self: *DiagLevel = @ptrCast(@alignCast(ctx));
 
+        const time_elapsed = gfx.get_ticks() * 0.001; // in seconds
+
         self.clear_screen();
         self.handle_inputs();
         // Coordinate system transformations
@@ -69,7 +76,7 @@ pub const DiagLevel = struct {
         const tile_bottom_right = TileCoord.init_from_world_br(visible_rect.bottom_right);
         // 3. for each tile in the rectangle:
         for (self.level.layers, 0..) |layer, num| {
-            if (layer.tiles == null) {
+            if (layer.cells == null) {
                 continue;
             }
             if (num != 3) {
@@ -77,14 +84,14 @@ pub const DiagLevel = struct {
             }
 
             for (tile_top_left.y..tile_bottom_right.y) |y| {
-                if (y >= layer.tiles.?.len) {
+                if (y >= layer.cells.?.len) {
                     break;
                 }
                 for (tile_top_left.x..tile_bottom_right.x) |x| {
-                    if (x >= layer.tiles.?[y].len) {
+                    if (x >= layer.cells.?[y].len) {
                         break;
                     }
-                    const lev_tile = layer.tiles.?[y][x].?;
+                    const lev_tile = layer.cells.?[y][x].tile.?;
                     // convert back to the WorldCoord
                     const tile_word = WorldCoord{ .x = @intCast(x * TileCoord.SIZE), .y = @intCast(y * TileCoord.SIZE) };
                     // convert to the Screen Coord
@@ -97,11 +104,34 @@ pub const DiagLevel = struct {
                                 break :blk self.tileset.tiles[id];
                             },
                             assets.TileId.anim_tile => |id| blk: {
-                                const frame_id = self.level.animated_tiles[id].frames[0];
+                                // calculate current frame number
+                                var frame_no: usize = 0;
+                                const anim = self.level.animated_tiles[id];
+                                const ttimef = @as(f32, @floatFromInt(anim.speed)) * time_elapsed;
+                                const ttimei = @as(usize, @intFromFloat(@round(ttimef)));
+                                if (anim.is_ping_pong) {
+                                    frame_no = ttimei % (anim.frame_count * 2 - 2);
+                                    if (frame_no >= anim.frame_count) {
+                                        frame_no = (2 * anim.frame_count) - frame_no - 1;
+                                    }
+                                } else {
+                                    frame_no = ttimei % anim.frame_count;
+                                }
+                                const frame_id = anim.frames[frame_no];
                                 break :blk self.tileset.tiles[frame_id];
                             },
                         };
                         asset_tile.sprite.draw_i32(scr.x, scr.y);
+
+                        if (layer.cells.?[y][x].event) |ev| {
+                            //render event
+                            // std.debug.print("Try Draw {s}", .{"event"});
+                            if (asset_maps.event2animsetinxd(ev.id)) |anim| {
+                                const a = &self.animset_conv.blocks[anim.animblock][anim.anim];
+                                a.draw(scr.x, scr.y);
+                                // std.debug.print("Draw {s}", .{"event"});
+                            }
+                        }
                     }
                 }
             }
@@ -115,6 +145,7 @@ pub const DiagLevel = struct {
 
         self.tileset.deinit();
         self.animset.deinit();
+        self.animset_conv.deinit(self.allocator);
         self.level.deinit();
         self.shell.deinit();
     }
