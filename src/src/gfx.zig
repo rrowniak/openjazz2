@@ -1,6 +1,7 @@
 pub const sdl = @cImport({
     @cInclude("SDL3/SDL.h");
     @cInclude("SDL3_ttf/SDL_ttf.h");
+    @cInclude("SDL3_mixer/SDL_mixer.h");
 });
 const std = @import("std");
 
@@ -12,6 +13,8 @@ var g_screen_h: c_int = 800;
 
 var g_sdl_events: std.array_list.Managed(sdl.SDL_Event) = undefined;
 var g_alloc = std.heap.GeneralPurposeAllocator(.{}){};
+
+var g_mixer: ?*sdl.MIX_Mixer = null;
 
 pub fn screen_res() struct {w: usize, h: usize} {
     return .{.w = @intCast(g_screen_w), .h = @intCast(g_screen_h)};
@@ -34,6 +37,9 @@ pub fn init() !void {
     _ = sdl.TTF_Init();
 
     g_sdl_events = .init(g_alloc.allocator());
+
+    _ = sdl.MIX_Init();
+    g_mixer = sdl.MIX_CreateMixerDevice(sdl.SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, null);
 }
 
 pub fn init_window() void {
@@ -173,15 +179,10 @@ pub const IndexedSprite = struct {
         var colors: [256]sdl.SDL_Color = undefined;
         for (palette, 0..) |c, i| {
             // colors[i] = c;
-            colors[i].g = @intCast((c >> 24) & 0xff);
             colors[i].b = @intCast((c >> 16) & 0xff);
             colors[i].g = @intCast((c >> 8) & 0xff);
             colors[i].r = @intCast(c & 0xff);
             colors[i].a = if (i == 0) 0 else 255;
-            // colors[i].r = @intCast((c >> 24) & 0xff);
-            // colors[i].g = @intCast((c >> 16) & 0xff);
-            // colors[i].b = @intCast((c >> 8) & 0xff);
-            // colors[i].a = @intCast(c & 0xff);
         }
 
         if (!sdl.SDL_SetPaletteColors(pal, &colors, 0, 256)) return error.PaletteSetFailed;
@@ -263,6 +264,7 @@ pub fn clean_screen(r: f32, g: f32, b: f32) void {
 }
 
 pub fn deinit() void {
+    sdl.MIX_Quit();
     sdl.TTF_Quit();
     if (g_sdl_renderer != null) {
         sdl.SDL_DestroyRenderer(g_sdl_renderer);
@@ -274,6 +276,30 @@ pub fn deinit() void {
 
     g_sdl_events.deinit();
 }
+
+pub const Sound = struct {
+    chunk: *sdl.MIX_Audio,
+
+    pub fn init_from_raw(data: []const u8) !@This() {
+        const audiospec = sdl.SDL_AudioSpec {
+            .freq = 44100,
+            .format = sdl.SDL_AUDIO_S16LE,
+            .channels = 2,
+        };
+        return .{
+            .chunk = sdl.MIX_LoadRawAudioNoCopy(null, data.ptr, data.len, &audiospec, false).?,
+        };
+    }
+
+    pub fn play(self: *@This()) void {
+        _ = sdl.MIX_PlayAudio(g_mixer, self.chunk);
+    }
+
+    pub fn deinit(self: *@This()) void {
+        _ = self;
+        // sdl.MIX_DestroyAudio(self.chunk);
+    }
+};
 
 fn test_audio(sample_rate: u32, data: []const u8) void {
     // ... prerequisite: initialize SDL with SDL_Init(SDL_INIT_AUDIO);

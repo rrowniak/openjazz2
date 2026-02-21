@@ -31,6 +31,7 @@ pub fn build(b: *std.Build) void {
     exe.linkLibC();
     exe.linkSystemLibrary("sdl3");
     exe.linkSystemLibrary("SDL3_ttf");
+    exe.linkSystemLibrary("SDL3_mixer");
 
     b.installArtifact(exe);
 

@@ -591,7 +591,7 @@ pub fn load_level(allocator: std.mem.Allocator, path: []const u8) !assets.Level 
     var dict_records = try allocator.alloc(DictRecord, dict_block.len / 8);
     defer allocator.free(dict_records);
     try readStructWithSlices_([]DictRecord, &dict_records, &r_dict);
-    
+    // std.debug.print("Music file: {}\n", .{lev_info});
     var layers: [8]assets.Layer = undefined;
 
     for (0..8) |layer_num| {
@@ -690,6 +690,34 @@ fn parse_event(ev_raw: u32) ?assets.Event {
         return null;
     }
     return .{.id = @enumFromInt(id)};
+}
+
+// Music file j2b format
+const MusicHeader = struct {
+    magic: [4]u8, //MUSE
+    format: u32, // 0xDEADBEAF(0xAFBEADDE) (RIFF AM) or 0xBEBAADDE (RIFF AMFF)
+    file_size: u32,
+    CRC32: u32,
+    CData: u32,
+    UData: u32,
+};
+
+pub fn load_music(allocator: std.mem.Allocator, path: []const u8) !struct{format: u32, data:[]u8} {
+    info("Loading music {s}", .{path});
+    var file = try std.fs.cwd().openFile(path, .{});
+    defer file.close();
+
+    const header = try easy_bit.fread(MusicHeader, &file);
+    if (!std.mem.eql(u8, &header.magic, "MUSE")) {
+        err("Loading music {s} error: expected magic MUSE got '{s}'", .{path, header.magic});
+        return error.InvalidFormat;
+    }
+
+    info("Seen format: '{X}'\n", .{header.format});
+    debug("Reading info block: cdata={}, udata={}", .{header.CData, header.UData});
+    const content_lbk = try decompress(allocator, &file, @intCast(header.CData), @intCast(header.UData));
+    // defer allocator.free(content_lbk);
+    return .{.format = header.format, .data = content_lbk};
 }
 
 const TEST_DATA_TILES = "test_data1/v123";
