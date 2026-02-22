@@ -15,7 +15,6 @@ pub fn readFileAlloc(
 
     const stat = try file.stat();
     var buff = try allocator.alloc(u8, stat.size);
-    // const io: std.Io.Reader = .fixed(buff);
 
     buff = try cwd.readFile(filename, buff);
     return buff;
@@ -23,34 +22,45 @@ pub fn readFileAlloc(
 
 pub const DiagSound = struct {
     allocator: std.mem.Allocator,
-    // sound: gfx.Sound,
     update_once: bool = false,
+    openmpt: OpenMPT,
+    music: J2bSound,
+    stream: ?*gfx.sdl.SDL_AudioStream,
 
     pub fn init(alloc: std.mem.Allocator, j2b_path: []const u8) !DiagSound {
-        try loadOpenMPT();
-        // const sound_raw = try asset_reader.load_music(alloc, j2b_path);
-        // defer alloc.free(sound_raw.data);
-        // Read file into memory
+        var spec: gfx.sdl.SDL_AudioSpec = undefined;
+        spec.freq = SAMPLE_RATE;
+        spec.format = gfx.sdl.SDL_AUDIO_S16;
+        spec.channels = CHANNELS;
+
+        const stream = gfx.sdl.SDL_OpenAudioDeviceStream(
+            gfx.sdl.SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
+            &spec,
+            null,
+            null,
+        );
+        if (stream == null) {
+            std.debug.print("Failed to open audio stream\n", .{});
+            return error.StreamInitFailed;
+        }
+
+        if (!gfx.sdl.SDL_ResumeAudioDevice(gfx.sdl.SDL_GetAudioStreamDevice(stream))) {
+            std.debug.print("Failed to resume audio\n", .{});
+            return error.FailResumeAudio;
+        }
+
+        const openmpt: OpenMPT = try .init();
+
         const file_data = try readFileAlloc(alloc, j2b_path);
         defer alloc.free(file_data);
 
-        g_module =
-            g_openmpt.openmpt_module_create_from_memory.?(
-                file_data.ptr,
-                file_data.len,
-                null,
-                null,
-                null,
-            );
+        const music = try J2bSound.init(file_data, openmpt);
 
-        if (g_module == null) {
-            std.debug.print("Failed to load module\n", .{});
-            return error.ModuleLoadingFailure;
-        }
-        try play_init();
         return .{
             .allocator = alloc,
-            // .sound = try .init_from_raw(sound_raw.data),
+            .openmpt = openmpt,
+            .music = music,
+            .stream = stream,
         };
     }
     pub fn app_cast(self: *DiagSound) app.IApp {
@@ -64,6 +74,7 @@ pub const DiagSound = struct {
         const self: *DiagSound = @ptrCast(@alignCast(ctx));
 
         self.clear_screen();
+        self.music.progress_play(self.stream);
 
         if (!self.update_once) {
             // self.sound.play();
@@ -73,7 +84,9 @@ pub const DiagSound = struct {
 
     fn deinit(ctx: *anyopaque) void {
         const self: *DiagSound = @ptrCast(@alignCast(ctx));
-        _ = self;
+        self.music.deinit();
+        self.openmpt.deinit();
+        gfx.sdl.SDL_DestroyAudioStream(self.stream);
     }
 
     fn clear_screen(self: *DiagSound) void {
@@ -95,7 +108,7 @@ const BUFFER_FRAMES = 1024;
 const OpenMPT = struct {
     handle: ?*anyopaque,
 
-    openmpt_module_create_from_memory: ?*const fn (
+    module_create_from_memory: ?*const fn (
         data: ?*const anyopaque,
         size: usize,
         logfunc: ?*const anyopaque,
@@ -103,131 +116,113 @@ const OpenMPT = struct {
         err: ?*c_int,
     ) callconv(.c) ?*anyopaque,
 
-    openmpt_module_destroy: *const fn (?*anyopaque) callconv(.c) void,
+    module_destroy: *const fn (?*anyopaque) callconv(.c) void,
 
-    openmpt_module_read_interleaved_stereo: *const fn (
+    module_read_interleaved_stereo: *const fn (
         module: ?*anyopaque,
         samplerate: c_int,
         count: usize,
         buffer: [*c]i16,
     ) callconv(.c) usize,
 
-    openmpt_module_set_repeat_count: *const fn (
+    module_set_repeat_count: *const fn (
         module: ?*anyopaque,
         repeat: c_int,
     ) callconv(.c) void,
+
+    fn init() !OpenMPT {
+        const rtld = std.c.RTLD{ .NOW = true };
+        const handle = std.c.dlopen("libopenmpt.so", rtld);
+        if (handle == null) return error.OpenFailed;
+        errdefer _ = std.c.dlclose(handle.?);
+        // const handle = std.c.dlopen("/usr/lib/x86_64-linux-gnu/libopenmpt.so", rtld);
+        var openmpt = OpenMPT{
+            .handle = handle,
+            .module_create_from_memory =
+            // @ptrCast(@TypeOf(g_openmpt.openmpt_module_create_from_memory),
+            @ptrCast(std.c.dlsym(handle, "openmpt_module_create_from_memory")),
+            .module_destroy =
+            // @ptrCast(@TypeOf(g_openmpt.openmpt_module_destroy),
+            @ptrCast(std.c.dlsym(handle, "openmpt_module_destroy")),
+            .module_read_interleaved_stereo =
+            // @ptrCast(@TypeOf(g_openmpt.openmpt_module_read_interleaved_stereo),
+            @ptrCast(std.c.dlsym(handle, "openmpt_module_read_interleaved_stereo")),
+            .module_set_repeat_count =
+            // @ptrCast(@TypeOf(g_openmpt.openmpt_module_set_repeat_count),
+            @ptrCast(std.c.dlsym(handle, "openmpt_module_set_repeat_count")),
+        };
+
+        if (openmpt.module_create_from_memory == null)
+            return error.SymbolMissing;
+
+        return openmpt;
+    }
+
+    fn deinit(self: OpenMPT) void {
+        _ = std.c.dlclose(self.handle.?);
+    }
 };
 
-var g_module: ?*anyopaque = null;
-var g_openmpt: OpenMPT = undefined;
+// fn audioCallback(
+//     userdata: ?*anyopaque,
+//     stream: [*c]u8,
+//     len: c_int,
+// ) callconv(.c) void {
+//     _ = userdata;
+//     if (g_module == null) {
+//         @memset(stream[0..@intCast(len)], 0);
+//         return;
+//     }
+//
+//     const frames = @as(usize, @intCast(len)) / (2 * CHANNELS);
+//     const out = @as([*c]i16, @ptrCast(stream));
+//
+//     const written = g_openmpt.openmpt_module_read_interleaved_stereo(
+//         g_module,
+//         SAMPLE_RATE,
+//         frames,
+//         out,
+//     );
+//
+//     if (written < frames) {
+//         const remaining_bytes =
+//             (frames - written) * CHANNELS * 2;
+//         _ = remaining_bytes;
+//         @memset(stream[(written * CHANNELS * 2)..@intCast(len)], 0);
+//     }
+// }
 
-fn loadOpenMPT() !void {
-    const rtld = std.c.RTLD{ .NOW = true };
-    const handle = std.c.dlopen("libopenmpt.so", rtld);
-    // const handle = std.c.dlopen("/usr/lib/x86_64-linux-gnu/libopenmpt.so", rtld);
-    if (handle == null) return error.OpenFailed;
+const J2bSound = struct {
+    module: ?*anyopaque,
+    openmpt: OpenMPT,
+    buffer: [BUFFER_FRAMES * CHANNELS]i16 = undefined,
 
-    g_openmpt = OpenMPT{
-        .handle = handle,
-        .openmpt_module_create_from_memory =
-        // @ptrCast(@TypeOf(g_openmpt.openmpt_module_create_from_memory),
-        @ptrCast(std.c.dlsym(handle, "openmpt_module_create_from_memory")),
-        .openmpt_module_destroy =
-        // @ptrCast(@TypeOf(g_openmpt.openmpt_module_destroy),
-        @ptrCast(std.c.dlsym(handle, "openmpt_module_destroy")),
-        .openmpt_module_read_interleaved_stereo =
-        // @ptrCast(@TypeOf(g_openmpt.openmpt_module_read_interleaved_stereo),
-        @ptrCast(std.c.dlsym(handle, "openmpt_module_read_interleaved_stereo")),
-        .openmpt_module_set_repeat_count =
-        // @ptrCast(@TypeOf(g_openmpt.openmpt_module_set_repeat_count),
-        @ptrCast(std.c.dlsym(handle, "openmpt_module_set_repeat_count")),
-    };
+    fn init(data: []const u8, openmpt: OpenMPT) !J2bSound {
+        const module =
+            openmpt.module_create_from_memory.?(
+                data.ptr,
+                data.len,
+                null,
+                null,
+                null,
+            );
+        if (module == null) {
+            std.debug.print("Failed to load module\n", .{});
+            return error.ModuleLoadingFailure;
+        }
+        openmpt.module_set_repeat_count(module, -1);
 
-    if (g_openmpt.openmpt_module_create_from_memory == null)
-        return error.SymbolMissing;
-}
-
-fn audioCallback(
-    userdata: ?*anyopaque,
-    stream: [*c]u8,
-    len: c_int,
-) callconv(.c) void {
-    _ = userdata;
-    if (g_module == null) {
-        @memset(stream[0..@intCast(len)], 0);
-        return;
+        return .{ .module = module, .openmpt = openmpt };
     }
 
-    const frames = @as(usize, @intCast(len)) / (2 * CHANNELS);
-    const out = @as([*c]i16, @ptrCast(stream));
-
-    const written = g_openmpt.openmpt_module_read_interleaved_stereo(
-        g_module,
-        SAMPLE_RATE,
-        frames,
-        out,
-    );
-
-    if (written < frames) {
-        const remaining_bytes =
-            (frames - written) * CHANNELS * 2;
-        _ = remaining_bytes;
-        @memset(stream[(written * CHANNELS * 2)..@intCast(len)], 0);
-    }
-}
-
-pub fn play_init() !void {
-    g_openmpt.openmpt_module_set_repeat_count(g_module, -1);
-
-    var spec: gfx.sdl.SDL_AudioSpec = undefined;
-    spec.freq = SAMPLE_RATE;
-    spec.format = gfx.sdl.SDL_AUDIO_S16;
-    spec.channels = CHANNELS;
-
-    const stream = gfx.sdl.SDL_OpenAudioDeviceStream(
-        gfx.sdl.SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
-        &spec,
-        null,
-        null,
-    );
-    if (stream == null) {
-        std.debug.print("Failed to open audio stream\n", .{});
-        return;
+    fn progress_play(self: *J2bSound, stream: ?*gfx.sdl.SDL_AudioStream) void {
+        const frames = self.openmpt.module_read_interleaved_stereo(self.module, SAMPLE_RATE, BUFFER_FRAMES, &self.buffer);
+        if (frames != 0) {
+            _ = gfx.sdl.SDL_PutAudioStreamData(stream, &self.buffer, @intCast(frames * CHANNELS * @sizeOf(i16)));
+        }
     }
 
-    const c = gfx.sdl;
-
-    if (!c.SDL_ResumeAudioDevice(c.SDL_GetAudioStreamDevice(stream))) {
-        std.debug.print("Failed to resume audio\n", .{});
-        return;
+    fn deinit(self: *J2bSound) void {
+        _ = self;
     }
-
-    std.debug.print("Playing... Press Enter to quit\n", .{});
-
-    var buffer: [BUFFER_FRAMES * CHANNELS]i16 = undefined;
-
-    while (true) {
-        const frames = g_openmpt.openmpt_module_read_interleaved_stereo(
-            g_module,
-            SAMPLE_RATE,
-            BUFFER_FRAMES,
-            &buffer,
-        );
-
-        if (frames == 0) break;
-
-        _ = c.SDL_PutAudioStreamData(
-            stream,
-            &buffer,
-            @intCast(frames * CHANNELS * @sizeOf(i16)),
-        );
-
-        // std.time.sleep(10 * std.time.ns_per_ms);
-        // try std.Io.sleep(.fromNamoseconds(10), .awake);
-    }
-
-    // _ = std.Io.getStdIn().reader().readByte() catch {};
-
-    // c.SDL_DestroyAudioStream(stream);
-    // g_openmpt.destroy(g_module);
-}
+};
