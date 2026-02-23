@@ -1,7 +1,7 @@
 const std = @import("std");
 const app = @import("app.zig");
 const assets = @import("assets.zig");
-const gfx = @import("gfx.zig");
+const gfx = @import("gfx").gfx;
 const asset_reader = @import("assets_reader.zig");
 
 const SPR_IN_ROW: usize = 10;

@@ -1,5 +1,5 @@
 const assets = @import("assets.zig");
-const easy_bit = @import("easy_bit.zig");
+const easy_bit = @import("utils").easy_bit;
 const std = @import("std");
 const info = std.log.info;
 const err = std.log.err;
@@ -771,7 +771,7 @@ test "struct from memory" {
 }
 
 test "Loading tileset" {
-    const gfx = @import("gfx.zig");
+    const gfx = @import("gfx").gfx;
     try gfx.init();
     gfx.init_window(); 
     defer gfx.deinit();
@@ -783,7 +783,7 @@ test "Loading tileset" {
 }
 
 test "Loading anims" {
-    const gfx = @import("gfx.zig");
+    const gfx = @import("gfx").gfx;
     try gfx.init();
     gfx.init_window(); 
     defer gfx.deinit();
@@ -798,7 +798,7 @@ test "Loading anims" {
 test "Load all .j2t tilesets from TEST_DATA_TILES "  {
     const allocator = std.testing.allocator;
     const dir_path = TEST_DATA_TILES;
-    const gfx = @import("gfx.zig");
+    const gfx = @import("gfx").gfx;
     try gfx.init();
     gfx.init_window();
     defer gfx.deinit();
@@ -834,7 +834,7 @@ test "Load all .j2t tilesets from TEST_DATA_TILES "  {
 }
 
 test "Loading level" {
-    const gfx = @import("gfx.zig");
+    const gfx = @import("gfx").gfx;
     try gfx.init();
     gfx.init_window();
     defer gfx.deinit();

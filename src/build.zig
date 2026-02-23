@@ -3,6 +3,16 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+
+    const gfx = b.addModule("gfx", .{
+        .root_source_file = b.path("./src/gfx/root.zig"),
+        .target = target,
+    });
+
+    const utils = b.addModule("utils", .{
+        .root_source_file = b.path("./src/utils/root.zig"),
+        .target = target,
+    });
     
     const exe = b.addExecutable(.{
         .name = "openjazz2",
@@ -11,6 +21,8 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
             .imports = &.{
+                .{ .name = "gfx", .module = gfx },
+                .{ .name = "utils", .module = utils },
             },
         }),
     });
@@ -56,11 +68,7 @@ pub fn build(b: *std.Build) void {
         "src/assets.zig",
         "src/assets_reader.zig",
         "src/console.zig",
-        "src/gfx.zig",
-        // "src/main.zig",
-        "src/utils.zig",
         "src/diag_level.zig",
-        "src/easy_bit.zig",
         "src/g_math.zig",
         "src/g_anim.zig",
     };

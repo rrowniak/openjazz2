@@ -1,24 +1,9 @@
 const std = @import("std");
 const app = @import("app.zig");
 const assets = @import("assets.zig");
-const gfx = @import("gfx.zig");
+const gfx = @import("gfx").gfx;
+const utils = @import("utils").utils;
 const asset_reader = @import("assets_reader.zig");
-
-pub fn readFileAlloc(
-    allocator: std.mem.Allocator,
-    filename: []const u8,
-) ![]u8 {
-    const cwd = std.fs.cwd();
-
-    const file = try cwd.openFile(filename, .{});
-    defer file.close();
-
-    const stat = try file.stat();
-    var buff = try allocator.alloc(u8, stat.size);
-
-    buff = try cwd.readFile(filename, buff);
-    return buff;
-}
 
 pub const DiagSound = struct {
     allocator: std.mem.Allocator,
@@ -51,7 +36,7 @@ pub const DiagSound = struct {
 
         const openmpt: OpenMPT = try .init();
 
-        const file_data = try readFileAlloc(alloc, j2b_path);
+        const file_data = try utils.read_file_to_buff(alloc, j2b_path);
         defer alloc.free(file_data);
 
         const music = try J2bSound.init(file_data, openmpt);

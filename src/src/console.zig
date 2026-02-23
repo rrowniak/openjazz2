@@ -1,5 +1,5 @@
 const std = @import("std");
-const gfx = @import("gfx.zig");
+const gfx = @import("gfx").gfx;
 const sdl = gfx.sdl;
 
 const Command = struct {

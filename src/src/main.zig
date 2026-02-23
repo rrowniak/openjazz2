@@ -1,7 +1,7 @@
 const std = @import("std");
 const print = @import("std").debug.print;
 
-const gfx = @import("gfx.zig");
+const gfx = @import("gfx").gfx;
 const assets = @import("assets.zig");
 const assets_reader = @import("assets_reader.zig");
 const diag_tileset = @import("diag_tileset.zig");

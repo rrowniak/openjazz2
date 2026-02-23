@@ -1,5 +1,5 @@
 const std = @import("std");
-const gfx = @import("gfx.zig");
+const gfx = @import("gfx").gfx;
 const assets = @import("assets.zig");
 
 pub const ConvertedAnimset = struct {

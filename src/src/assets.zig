@@ -1,6 +1,6 @@
 const std = @import("std");
 const maps = @import("assets_maps.zig");
-const gfx = @import("gfx.zig");
+const gfx = @import("gfx").gfx;
 
 pub const JJ2Version = enum(u16) {
     Unknown = 0x0000,
