@@ -99,6 +99,7 @@ pub fn build(b: *std.Build) void {
     // needed by SDL3 - otherwise segfault
     exe_tests.linkLibC();
     exe_tests.linkSystemLibrary("sdl3");
+    exe_tests.linkSystemLibrary("gl");
 
     const run_exe_tests = b.addRunArtifact(exe_tests);
 
