@@ -8,12 +8,16 @@ const gl = gfx.gl;
 pub const DiagGfx = struct {
     allocator: std.mem.Allocator,
     gfx_sys: gfx.sys,
+    const Uniforms = enum { color };
 
     pub fn init(alloc: std.mem.Allocator) !DiagGfx {
-        _ = try gfx.shader.init("aa", "bb", null);
+        const gfx_sys: gfx.sys = try .init("Jazz2", 1400, 800);
+        const fs = @embedFile("./gfx/glsl/test.frag.glsl");
+        const vs = @embedFile("./gfx/glsl/test.vert.glsl");
+        _ = try gfx.gl_utils.ShaderProgram(Uniforms).init(vs, fs, null);
         return .{
             .allocator = alloc,
-            .gfx_sys = try .init("Jazz2", 1400, 800),
+            .gfx_sys = gfx_sys,
         };
     }
     pub fn app_cast(self: *DiagGfx) app.IApp {
