@@ -66,6 +66,9 @@ pub fn init(window_name: [*c]const u8, width: u16, height: u16) !Self {
     }
 
     gl.glViewport(0, 0, width, height);
+    gl.glEnable(gl.GL_BLEND);
+    gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA);
+
     gl.glEnable(gl.GL_DEPTH_TEST);
 
     return .{
