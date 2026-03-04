@@ -1,9 +1,9 @@
 const std = @import("std");
 const print = @import("std").debug.print;
 
-const gfx = @import("gfx").gfx;
-const assets = @import("assets.zig");
-const assets_reader = @import("assets_reader.zig");
+// const gfx = @import("gfx").gfx;
+// const assets = @import("assets.zig");
+// const assets_reader = @import("assets_reader.zig");
 const diag_tileset = @import("diag_tileset.zig");
 const diag_animset = @import("diag_animset.zig");
 const diag_level = @import("diag_level.zig");
@@ -28,12 +28,12 @@ pub fn main() !void {
     defer args.deinit();
     const prog_name = args.next() orelse "program";
     const command = args.next() orelse DEFAULT_COMMAND;
-    if (!std.mem.eql(u8, command, "gfx")) {
-        // init gfx, sound, window
-        try gfx.init();
-        gfx.init_window();
-        defer gfx.deinit();
-    }
+    // if (!std.mem.eql(u8, command, "gfx")) {
+    //     // init gfx, sound, window
+    //     try gfx.init();
+    //     gfx.init_window();
+    //     defer gfx.deinit();
+    // }
 
     var app: @import("app.zig").IApp = undefined;
     var tilesets: diag_tileset.DiagTileset = undefined;
@@ -41,6 +41,7 @@ pub fn main() !void {
     var level: diag_level.DiagLevel = undefined;
     var sound: diag_sound.DiagSound = undefined;
     var gfx_sys: diag_gfx.DiagGfx = undefined;
+
     if (std.mem.eql(u8, command, "tileset")) {
         // filename
         const arg = args.next() orelse DEFAULT_TILESET;
@@ -62,9 +63,9 @@ pub fn main() !void {
     } else if (std.mem.eql(u8, command, "gfx")) {
         gfx_sys = try .init(alloc);
         app = gfx_sys.app_cast();
-        defer app.deinit();
-        app.update();
-        return;
+        // defer app.deinit();
+        // app.update();
+        // return;
     } else {
         std.debug.print("No command valid selected ({s})!\n", .{command});
         printHelp(prog_name);
@@ -73,11 +74,12 @@ pub fn main() !void {
 
     defer app.deinit();
 
-    while (gfx.is_running()) {
-        gfx.update_frame();
-        app.update();
-        gfx.render();
-    }
+    // while (gfx.is_running()) {
+    //     gfx.update_frame();
+    //     app.update();
+    //     gfx.render();
+    // }
+    app.run();
 }
 
 fn printHelp(prog_name: []const u8) void {

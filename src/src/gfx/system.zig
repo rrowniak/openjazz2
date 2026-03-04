@@ -7,6 +7,7 @@ pub const sdl = @cImport({
 pub const gl = @cImport({
     @cDefine("GL_GLEXT_PROTOTYPES", ""); // needed for some functions like glCreateShader
     @cInclude("GL/gl.h");
+    // @cInclude("GL/glext.h");
 });
 
 const Self = @This();

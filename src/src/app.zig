@@ -5,12 +5,12 @@ pub const IApp = struct {
     vtable: *const VTable,
 
     pub const VTable = struct {
-        update: *const fn (*anyopaque) void,
+        run: *const fn (*anyopaque) void,
         deinit: *const fn (*anyopaque) void,
     };
 
-    pub fn update(self: *IApp) void {
-        self.vtable.update(self.ptr);
+    pub fn run(self: *IApp) void {
+        self.vtable.run(self.ptr);
     }
 
     pub fn deinit(self: *IApp) void {

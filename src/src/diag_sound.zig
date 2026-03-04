@@ -50,12 +50,12 @@ pub const DiagSound = struct {
     }
     pub fn app_cast(self: *DiagSound) app.IApp {
         return .{ .ptr = self, .vtable = &.{
-            .update = update,
+            .run = run,
             .deinit = deinit,
         } };
     }
 
-    fn update(ctx: *anyopaque) void {
+    fn run(ctx: *anyopaque) void {
         const self: *DiagSound = @ptrCast(@alignCast(ctx));
 
         self.clear_screen();

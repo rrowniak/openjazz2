@@ -56,12 +56,12 @@ pub const DiagLevel = struct {
         self.shell.register_cmd("show", show_cmd, self);
 
         return .{ .ptr = self, .vtable = &.{
-            .update = update,
+            .run = run,
             .deinit = deinit,
         } };
     }
 
-    fn update(ctx: *anyopaque) void {
+    fn run(ctx: *anyopaque) void {
         const self: *DiagLevel = @ptrCast(@alignCast(ctx));
 
         const time_elapsed = gfx.get_ticks() * 0.001; // in seconds
@@ -121,7 +121,8 @@ pub const DiagLevel = struct {
                                 break :blk self.tileset.tiles[frame_id];
                             },
                         };
-                        asset_tile.sprite.draw_i32(scr.x, scr.y);
+                        _ = asset_tile;
+                        // asset_tile.sprite.draw_i32(scr.x, scr.y);
 
                         if (layer.cells.?[y][x].event) |ev| {
                             //render event

@@ -22,12 +22,12 @@ pub const DiagGfx = struct {
     }
     pub fn app_cast(self: *DiagGfx) app.IApp {
         return .{ .ptr = self, .vtable = &.{
-            .update = update,
+            .run = run,
             .deinit = deinit,
         } };
     }
 
-    fn update(ctx: *anyopaque) void {
+    fn run(ctx: *anyopaque) void {
         const self: *DiagGfx = @ptrCast(@alignCast(ctx));
 
         // main loop

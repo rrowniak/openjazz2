@@ -1,6 +1,7 @@
 const std = @import("std");
 const maps = @import("assets_maps.zig");
 const gfx = @import("gfx").gfx;
+const Texture2D = @import("gfx").gl_utils.Texture2D;
 
 pub const JJ2Version = enum(u16) {
     Unknown = 0x0000,
@@ -87,7 +88,8 @@ pub const BIT_MASK_SIZE = TILE_SIZE * TILE_SIZE / 8;
 pub const COLL_BIT_MASK = [BIT_MASK_SIZE]u8;
 
 pub const Tile = struct {
-    sprite: gfx.Sprite,
+    // sprite: gfx.Sprite,
+    texture: Texture2D,
     collision_bit_mask: COLL_BIT_MASK,
     flipped_collision_bit_mask: COLL_BIT_MASK,
 
@@ -129,12 +131,14 @@ pub const Tile = struct {
         @memcpy(t.collision_bit_mask[0..BIT_MASK_SIZE], coll_bit_mask[0..BIT_MASK_SIZE]);
         @memcpy(t.flipped_collision_bit_mask[0..BIT_MASK_SIZE], f_coll_bit_mask[0..BIT_MASK_SIZE]);
        
-        t.sprite = try gfx.Sprite.init_from_rgba(rgba, TILE_SIZE, TILE_SIZE);
+        // t.sprite = try gfx.Sprite.init_from_rgba(rgba, TILE_SIZE, TILE_SIZE);
+        t.texture = try Texture2D.init_from_rgba(rgba, TILE_SIZE, TILE_SIZE);
         return t;
     }
 
     pub fn deinit(self: Tile) void {
-        self.sprite.deinit();
+        // self.sprite.deinit();
+        self.texture.deinit();
     }
 };
 

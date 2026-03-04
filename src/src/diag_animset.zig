@@ -45,12 +45,12 @@ pub const DiagAnimset = struct {
 
     pub fn app_cast(self: *DiagAnimset) app.IApp {
         return .{ .ptr = self, .vtable = &.{
-            .update = update,
+            .run = run,
             .deinit = deinit,
         } };
     }
 
-    fn update(ctx: *anyopaque) void {
+    fn run(ctx: *anyopaque) void {
         const self: *DiagAnimset = @ptrCast(@alignCast(ctx));
 
         var render_next = false;

@@ -1,5 +1,9 @@
 const std = @import("std");
 const gl = @import("system.zig").gl;
+const math = @import("math.zig");
+const Mat4x4 = math.Mat4x4;
+const Vec2 = math.Vec2;
+const Vec3 = math.Vec3;
 
 comptime {
     if (gl.GLfloat != f32) {
@@ -10,23 +14,33 @@ comptime {
 pub const Texture2D = struct {
     const Self = Texture2D;
     tex_id: gl.GLuint,
-    w: usize,
-    h: usize,
-    
-    pub fn init_from_rgba(buf: []const u8, w: usize, h: usize) !Self {
+    w: i32,
+    h: i32,
+
+    pub fn init_from_rgba(buf: []const u8, w: anytype, h: anytype) !Self {
+        const w_ = if (@TypeOf(w) == i32) w else @as(i32, @intCast(w));
+        const h_ = if (@TypeOf(h) == i32) h else @as(i32, @intCast(h));
         var tex_id: gl.GLuint = 0;
         gl.glGenTextures(1, &tex_id);
         gl.glBindTexture(gl.GL_TEXTURE_2D, tex_id);
         defer gl.glBindTexture(gl.GL_TEXTURE_2D, 0);
-        
-        gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_S, gl.gl.AMP_TO_EDGE);
-        gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, gl.gl.AMP_TO_EDGE);
+
+        gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_S, gl.GL_CLAMP_TO_EDGE);
+        gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE);
         gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST_MIPMAP_LINEAR);
         gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST);
-        gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA, w, h, 0, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, buf.ptr);
+        gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA, w_, h_, 0, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, buf.ptr);
         gl.glGenerateMipmap(gl.GL_TEXTURE_2D);
 
-        return .{.tex_id = tex_id, .w = w, .h = h};
+        return .{ .tex_id = tex_id, .w = w_, .h = h_ };
+    }
+
+    pub fn bind(self: Self) void {
+        gl.glBindTexture(gl.GL_TEXTURE_2D, self.tex_id);
+    }
+
+    pub fn deinit(self: Self) void {
+        gl.glDeleteTextures(1, &self.tex_id);
     }
 };
 
@@ -138,16 +152,24 @@ pub fn ShaderProgram(comptime Uniforms: type) type {
             // }
         }
 
+        pub fn deinit(self: Self) void {
+            _ = self;
+        }
+
         pub fn use_prog(self: Self) void {
             gl.glUseProgram(self.program_id);
         }
 
-        pub fn setMatrix4(self: Self, comptime uniform: Uniforms, mat: [16]gl.GLfloat) void {
+        pub fn setMat4(self: Self, comptime uniform: Uniforms, mat: [16]gl.GLfloat) void {
             gl.glUniformMatrix4fv(self.uniforms_map[@intFromEnum(uniform)], 1, 0, &mat);
         }
 
         pub fn setVec2(self: Self, comptime uniform: Uniforms, vec: [2]gl.GLfloat) void {
             gl.glUniform2fv(self.uniforms_map[@intFromEnum(uniform)], 1, &vec);
+        }
+
+        pub fn setVec3(self: Self, comptime uniform: Uniforms, vec: [3]gl.GLfloat) void {
+            gl.glUniform3fv(self.uniforms_map[@intFromEnum(uniform)], 1, &vec);
         }
 
         pub fn setVec4(self: Self, comptime uniform: Uniforms, vec: [4]gl.GLfloat) void {
@@ -163,3 +185,82 @@ pub fn ShaderProgram(comptime Uniforms: type) type {
         }
     };
 }
+pub const SpriteUniforms = enum { image, spriteColor, model, projection };
+
+pub const SpriteRenderer = struct {
+    const Self = @This();
+    const Shader = ShaderProgram(SpriteUniforms);
+    quadVAO: gl.GLuint,
+    shader: Shader,
+    projection: Mat4x4,
+
+    pub fn init(vertex_sh: [:0]const u8, fragment_sh: [:0]const u8, w: f32, h: f32) !Self {
+        var ret: Self = undefined;
+        ret.projection = .init_ortho(0.0, w, h, 0.0, -1.0, 1.0);
+        ret.shader = try .init(vertex_sh, fragment_sh, null);
+        ret.shader.use_prog();
+        // set texture channel to zero aka GL_TEXTURE0
+        ret.shader.setInt(.image, 0);
+        ret.shader.setMat4(.projection, ret.projection.m);
+
+        // zig fmt: off
+        const vertices = [_]f32 { 
+            // pos      // tex
+            0.0, 1.0,   0.0, 1.0,
+            1.0, 0.0,   1.0, 0.0,
+            0.0, 0.0,   0.0, 0.0, 
+        
+            0.0, 1.0,   0.0, 1.0,
+            1.0, 1.0,   1.0, 1.0,
+            1.0, 0.0,   1.0, 0.0
+        };
+        // zig fmt: on
+
+        gl.glGenVertexArrays(1, &ret.quadVAO);
+        var VBO: gl.GLuint = 0;
+        gl.glGenBuffers(1, &VBO);
+
+        gl.glBindBuffer(gl.GL_ARRAY_BUFFER, VBO);
+        gl.glBufferData(gl.GL_ARRAY_BUFFER, @sizeOf(@TypeOf(vertices)), &vertices, gl.GL_STATIC_DRAW);
+
+        gl.glBindVertexArray(ret.quadVAO);
+        gl.glEnableVertexAttribArray(0);
+        gl.glVertexAttribPointer(0, 4, gl.GL_FLOAT, gl.GL_FALSE, 4 * @sizeOf(f32), null);
+        gl.glBindBuffer(gl.GL_ARRAY_BUFFER, 0);
+        gl.glBindVertexArray(0);
+
+        return ret;
+    }
+
+    pub fn deinit(self: Self) void {
+        gl.glDeleteVertexArrays(1, &self.quadVAO);
+        self.shader.deinit();
+    }
+
+    pub fn draw(self: Self, texture: Texture2D, position: Vec2, rotate: f32, color: Vec3) void {
+        // prepare transformations
+        self.shader.use_prog();
+
+        var model = Mat4x4.init_ident();
+        const size_x: f32 = @floatFromInt(texture.w);
+        const size_y: f32 = @floatFromInt(texture.h);
+
+        model = model.translate(Vec3.init(position.x(), position.y(), 0.0));
+
+        model = model.translate(Vec3.init(0.5 * size_x, 0.5 * size_y, 0.0));
+        model = model.rotate(std.math.degreesToRadians(rotate), Vec3.init(0.0, 0.0, 1.0));
+        model = model.translate(Vec3.init(-0.5 * size_x, -0.5 * size_y, 0.0));
+
+        model = model.scale(Vec3.init(size_x, size_y, 1.0));
+
+        self.shader.setMat4(.model, model.m);
+        self.shader.setVec3(.spriteColor, color.v);
+
+        gl.glActiveTexture(gl.GL_TEXTURE0);
+        texture.bind();
+
+        gl.glBindVertexArray(self.quadVAO);
+        gl.glDrawArrays(gl.GL_TRIANGLES, 0, 6);
+        gl.glBindVertexArray(0);
+    }
+};
