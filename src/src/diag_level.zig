@@ -98,6 +98,7 @@ pub const DiagLevel = struct {
                     const scr_coord = self.world_to_screen(tile_word);
                     // render if on the screen
                     if (scr_coord) |scr| {
+                        _ = scr;
                         const idd = lev_tile.id;
                         const asset_tile = switch (idd) {
                             assets.TileId.static_tile => |id| blk: {
@@ -128,9 +129,10 @@ pub const DiagLevel = struct {
                             //render event
                             // std.debug.print("Try Draw {s}", .{"event"});
                             if (asset_maps.event2animsetinxd(ev.id)) |anim| {
-                                const a = &self.animset_conv.blocks[anim.animblock][anim.anim];
-                                a.set_frame(time_elapsed);
-                                a.draw(scr.x, scr.y);
+                                _ = anim;
+                                // const a = &self.animset_conv.blocks[anim.animblock][anim.anim];
+                                // a.set_frame(time_elapsed);
+                                // a.draw(scr.x, scr.y);
                                 // std.debug.print("Draw {s}", .{"event"});
                             }
                         }

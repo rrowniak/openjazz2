@@ -70,6 +70,8 @@ pub const DiagTileset = struct {
     fn draw(self: *DiagTileset) void {
         var x: i32 = 0;
         var y: i32 = 0;
+        const time: f32 = @floatFromInt(sdl.SDL_GetTicks());
+        const brightness: f32 = (std.math.sin(time/1000) + 1) / 2;
         var block_cnt: i32 = 0;
         for (self.tileset.tiles, 0..) |t, i| {
             if (i != 0 and i % SPR_IN_ROW == 0) {
@@ -83,7 +85,7 @@ pub const DiagTileset = struct {
             // t.sprite.draw(@intCast(x), @intCast(y));
             const position = Vec2.init(@floatFromInt(x), @floatFromInt(y));
             const rotate: f32 = 0;
-            const color = Vec3.init(1, 1, 1);
+            const color = Vec3.init(brightness, brightness, brightness);
             self.renderer.draw(t.texture, position, rotate, color);
             x += t.texture.w;
         }
