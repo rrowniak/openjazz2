@@ -244,8 +244,10 @@ const FrameDecoder = struct {
         frame.pixels = try allocator.alloc(u8, w * h);
         @memset(frame.pixels[0..frame.pixels.len], 0);
         const width = try easy_bit.read(u16, reader);
+        // if (width & 0x7FFF != w) std.debug.print("width({d} != w({d}))\n", .{width & 0x7FFF, w});
         // height2
         _ = try easy_bit.read(u16, reader);
+        // if (height & 0x7FFF != h) std.debug.print("height({d} != h({d}))\n", .{height & 0x7FFF, h});
         frame.draw_transparent = (width & 0x8000) > 0;
 
         var indx: usize = 0;
@@ -255,19 +257,25 @@ const FrameDecoder = struct {
             if (op < 0x80)  { // skip `op` pixels
                 indx += op; 
             } else if (op == 0x80) { // skip to end of line
-                var left_in_line: usize = (w - (indx % w));
-                if ((indx % w == 0) and (!last_op_empty)) {
+                const line_indx = (indx % w);
+                var left_in_line: usize = (w - line_indx);
+                if ((line_indx == 0) and (!last_op_empty)) {
                     left_in_line = 0;
                 }
                 indx += left_in_line;
+                // indx += 1;
+                // while (indx % w != 0) indx += 1;
             } else { // op > 0x80 - copy `op & 127` pixels from stream
-                const to_read: usize = op & 0x7F;
+                var to_read: usize = op & 0x7F;
+                if (indx + to_read >= frame.pixels.len) to_read = frame.pixels.len - indx;
                 try reader.readSliceAll(frame.pixels[indx..indx + to_read]);
                 indx += to_read;
             }
 
             last_op_empty = (op == 0x80);
         }
+        // if (indx != frame.pixels.len)
+        //     std.debug.print("Read {d} pixels, len {d}\n", .{indx, frame.pixels.len});
         return frame;
     }
 

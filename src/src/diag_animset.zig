@@ -71,10 +71,13 @@ pub const DiagAnimset = struct {
             var ev: sdl.SDL_Event = undefined;
             while (sdl.SDL_PollEvent(&ev)) {
                 switch (ev.type) {
-                    sdl.SDL_EVENT_QUIT => return,
+                    sdl.SDL_EVENT_QUIT => {
+                        std.debug.print("Exit{s}", .{"!\n"});
+                        return;
+                    },
                     sdl.SDL_EVENT_KEY_DOWN => {
                         const key = ev.key;
-                        if (key.repeat) return;
+                        if (key.repeat) continue;
 
                         switch (key.scancode) {
                             sdl.SDL_SCANCODE_PAGEUP => self.anim_time += 1.0,
@@ -100,16 +103,7 @@ pub const DiagAnimset = struct {
     fn draw(self: *DiagAnimset) void {
         // const time_sdl: f32 = @floatFromInt(gfx.sdl.SDL_GetTicks());
         // const time_elapsed = time_sdl * 0.001 / 10;
-        // const keyboard = gfx.sdl.SDL_GetKeyboardState(null);
-        // if (keyboard[gfx.sdl.SDL_SCANCODE_PAGEUP]) {
-        //     self.anim_time += 1.0;
-        // }
-        //
-        // if (keyboard[gfx.sdl.SDL_SCANCODE_PAGEDOWN]) {
-        //     self.anim_time -= 1.0;
-        // }
         const time_elapsed = self.anim_time;
-        // const time_elapsed: f32 = 10.0;
         var y: i32 = 0;
         for (self.animset.blocks) |*b| {
             if (b.anims.len == 0) {
