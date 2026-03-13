@@ -231,19 +231,54 @@ const FrameInfo = struct {
     mask_address: i32,
 };
 
-const Frame = struct {
+const FrameDecoder = struct {
     width: u16,
     height: u16,
     draw_transparent: bool,
     pixels: []u8,
 
-    fn init(allocator: std.mem.Allocator, reader: *std.Io.Reader, w: u16, h: u16) !Frame {
-        var frame: Frame = undefined;
+    fn init(allocator: std.mem.Allocator, reader: *std.Io.Reader, w: u16, h: u16) !FrameDecoder {
+        var frame: FrameDecoder = undefined;
         frame.width = w;
         frame.height = h;
         frame.pixels = try allocator.alloc(u8, w * h);
         @memset(frame.pixels[0..frame.pixels.len], 0);
         const width = try easy_bit.read(u16, reader);
+        // height2
+        _ = try easy_bit.read(u16, reader);
+        frame.draw_transparent = (width & 0x8000) > 0;
+
+        var indx: usize = 0;
+        var last_op_empty = true;
+        while (indx < w * h) {
+            const op = try easy_bit.read(u8, reader);
+            if (op < 0x80)  { // skip `op` pixels
+                indx += op; 
+            } else if (op == 0x80) { // skip to end of line
+                var left_in_line: usize = (w - (indx % w));
+                if ((indx % w == 0) and (!last_op_empty)) {
+                    left_in_line = 0;
+                }
+                indx += left_in_line;
+            } else { // op > 0x80 - copy `op & 127` pixels from stream
+                const to_read: usize = op & 0x7F;
+                try reader.readSliceAll(frame.pixels[indx..indx + to_read]);
+                indx += to_read;
+            }
+
+            last_op_empty = (op == 0x80);
+        }
+        return frame;
+    }
+
+    fn init_2(allocator: std.mem.Allocator, reader: *std.Io.Reader, w: u16, h: u16) !FrameDecoder {
+        var frame: FrameDecoder = undefined;
+        frame.width = w;
+        frame.height = h;
+        frame.pixels = try allocator.alloc(u8, w * h);
+        @memset(frame.pixels[0..frame.pixels.len], 0);
+        const width = try easy_bit.read(u16, reader);
+        // height2
         _ = try easy_bit.read(u16, reader);
         frame.draw_transparent = (width & 0x8000) > 0;
 
@@ -270,7 +305,7 @@ const Frame = struct {
         return frame;
     }
 
-    fn deinit(self: Frame, allocator: std.mem.Allocator) void {
+    fn deinit(self: FrameDecoder, allocator: std.mem.Allocator) void {
         allocator.free(self.pixels);
     }
 };
@@ -369,7 +404,7 @@ pub fn load_animset(allocator: std.mem.Allocator, path: []const u8) !assets.Anim
                 var frame_info: FrameInfo = undefined;
                 try readStructWithSlices_(FrameInfo, &frame_info, &frame_blk_reader);
                 var r = std.Io.Reader.fixed(image_blk[@intCast(frame_info.image_address)..]);
-                var f = try Frame.init(
+                var f = try FrameDecoder.init(
                     allocator,
                     &r,
                     @intCast(frame_info.width), @intCast(frame_info.height)

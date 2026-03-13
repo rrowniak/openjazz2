@@ -14,6 +14,8 @@ pub const DiagTileset = struct {
     allocator: std.mem.Allocator,
     gfx_sys: gfx.sys,
     renderer: gfx.gl_utils.SpriteRenderer,
+    renderer_ind: gfx.gl_utils.IndexedSpriteRenderer,
+    palette: gfx.gl_utils.Texture1D,
     tileset: assets.Tileset,
     scr_w: usize,
     scr_h: usize,
@@ -22,11 +24,15 @@ pub const DiagTileset = struct {
         const gfx_sys: gfx.sys = try .init("Jazz2", 1400, 800);
         const vertex_sh = @embedFile("./gfx/glsl/sprite.vert.glsl");
         const fragment_sh = @embedFile("./gfx/glsl/sprite.frag.glsl");
+        const fragment_sh_ind = @embedFile("./gfx/glsl/sprite_ind.frag.glsl");
+        const tileset = try asset_reader.load_tileset(alloc, j2t_path);
         return .{ 
             .allocator = alloc,
             .gfx_sys = gfx_sys,
             .renderer = try .init(vertex_sh, fragment_sh, 1400, 800),
-            .tileset = try asset_reader.load_tileset(alloc, j2t_path),
+            .renderer_ind = try .init(vertex_sh, fragment_sh_ind, 1400, 800),
+            .tileset = tileset, 
+            .palette = try .init_from_palette_rgba(&tileset.palette),
             .scr_w = gfx_sys.screen_w,
             .scr_h = gfx_sys.screen_h,
         };
@@ -36,6 +42,7 @@ pub const DiagTileset = struct {
         const self: *DiagTileset = @ptrCast(@alignCast(ctx));
 
         self.tileset.deinit();
+        self.renderer_ind.deinit();
         self.renderer.deinit();
         self.gfx_sys.deinit();
     }
@@ -61,6 +68,10 @@ pub const DiagTileset = struct {
                     else => {},
                 }
             }
+            const speed: f32 = 8.0;
+            const delta = app.handle_inputs_simple(speed); 
+            self.renderer.set_cam_delta(delta);
+            self.renderer_ind.set_cam_delta(delta);
             self.clear_screen();
             self.draw();
             self.gfx_sys.draw();
@@ -70,8 +81,9 @@ pub const DiagTileset = struct {
     fn draw(self: *DiagTileset) void {
         var x: i32 = 0;
         var y: i32 = 0;
-        const time: f32 = @floatFromInt(sdl.SDL_GetTicks());
-        const brightness: f32 = (std.math.sin(time/1000) + 1) / 2;
+        // const time: f32 = @floatFromInt(sdl.SDL_GetTicks());
+        // const brightness: f32 = (std.math.sin(time/1000) + 1) / 2;
+        const brightness: f32 = 1.0;
         var block_cnt: i32 = 0;
         for (self.tileset.tiles, 0..) |t, i| {
             if (i != 0 and i % SPR_IN_ROW == 0) {
@@ -86,7 +98,11 @@ pub const DiagTileset = struct {
             const position = Vec2.init(@floatFromInt(x), @floatFromInt(y));
             const rotate: f32 = 0;
             const color = Vec3.init(brightness, brightness, brightness);
-            self.renderer.draw(t.texture, position, rotate, color);
+            if (t.texture_ind) |tex| {
+                self.renderer_ind.draw(tex, self.palette, position, rotate, color);
+            } else {
+                self.renderer.draw(t.texture, position, rotate, color);
+            }
             x += t.texture.w;
         }
     }

@@ -90,6 +90,8 @@ pub const COLL_BIT_MASK = [BIT_MASK_SIZE]u8;
 
 pub const Tile = struct {
     texture: Texture2D,
+    // for testing purposes, might be needed in future anyway
+    texture_ind: ?Texture2DInd,
     collision_bit_mask: COLL_BIT_MASK,
     flipped_collision_bit_mask: COLL_BIT_MASK,
 
@@ -119,7 +121,9 @@ pub const Tile = struct {
             // rgba[i * 4 + 3] = 255;
         }
 
-        return try .init_from_rgba8(rgba, coll_bit_mask, f_coll_bit_mask);
+        var t = try @This().init_from_rgba8(rgba, coll_bit_mask, f_coll_bit_mask);
+        t.texture_ind = try Texture2DInd.init_from_indexed(indices, TILE_SIZE, TILE_SIZE);
+        return t;
     }
 
     pub fn init_from_rgba8(
@@ -132,11 +136,16 @@ pub const Tile = struct {
         @memcpy(t.flipped_collision_bit_mask[0..BIT_MASK_SIZE], f_coll_bit_mask[0..BIT_MASK_SIZE]);
        
         t.texture = try Texture2D.init_from_rgba(rgba, TILE_SIZE, TILE_SIZE);
+        t.texture_ind = null;
         return t;
     }
 
     pub fn deinit(self: Tile) void {
         self.texture.deinit();
+        if (self.texture_ind) |t| {
+            t.deinit();
+        }
+            // self.texture_ind.deinit();
     }
 };
 

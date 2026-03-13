@@ -245,7 +245,7 @@ pub fn ShaderProgram(comptime Uniforms: type) type {
         }
     };
 }
-pub const SpriteUniforms = enum { image, spriteColor, model, projection };
+pub const SpriteUniforms = enum { image, spriteColor, model, view, projection };
 
 pub const SpriteRenderer = struct {
     const Self = @This();
@@ -253,15 +253,18 @@ pub const SpriteRenderer = struct {
     quadVAO: gl.GLuint,
     shader: Shader,
     projection: Mat4x4,
+    view: Mat4x4,
 
     pub fn init(vertex_sh: [:0]const u8, fragment_sh: [:0]const u8, w: f32, h: f32) !Self {
         var ret: Self = undefined;
         ret.projection = .init_ortho(0.0, w, h, 0.0, -1.0, 1.0);
+        ret.view = .init_ident();
         ret.shader = try .init(vertex_sh, fragment_sh, null);
         ret.shader.use_prog();
         // set texture channel to zero aka GL_TEXTURE0
         ret.shader.setInt(.image, 0);
         ret.shader.setMat4(.projection, ret.projection.m);
+        ret.shader.setMat4(.view, ret.view.m);
 
         // zig fmt: off
         const vertices = [_]f32 { 
@@ -295,6 +298,10 @@ pub const SpriteRenderer = struct {
     pub fn deinit(self: Self) void {
         gl.glDeleteVertexArrays(1, &self.quadVAO);
         self.shader.deinit();
+    }
+
+    pub fn set_cam_delta(self: *Self, pos: Vec2) void {
+        self.view = self.view.translate(Vec3.init(-pos.x(), -pos.y(), 0.0));
     }
 
     pub fn draw(self: Self, texture: Texture2D, position: Vec2, rotate: f32, color: Vec3) void {
@@ -314,6 +321,7 @@ pub const SpriteRenderer = struct {
         model = model.scale(Vec3.init(size_x, size_y, 1.0));
 
         self.shader.setMat4(.model, model.m);
+        self.shader.setMat4(.view, self.view.m);
         self.shader.setVec3(.spriteColor, color.v);
 
         gl.glActiveTexture(gl.GL_TEXTURE0);
@@ -325,7 +333,7 @@ pub const SpriteRenderer = struct {
     }
 };
 
-pub const IndexedSpriteUniforms = enum { image, palette, spriteColor, model, projection };
+pub const IndexedSpriteUniforms = enum { image, palette, spriteColor, model, view, projection };
 
 pub const IndexedSpriteRenderer = struct {
     const Self = @This();
@@ -333,16 +341,19 @@ pub const IndexedSpriteRenderer = struct {
     quadVAO: gl.GLuint,
     shader: Shader,
     projection: Mat4x4,
+    view: Mat4x4,
 
     pub fn init(vertex_sh: [:0]const u8, fragment_sh: [:0]const u8, scr_w: f32, scr_h: f32) !Self {
         var ret: Self = undefined;
         ret.projection = .init_ortho(0.0, scr_w, scr_h, 0.0, -1.0, 1.0);
+        ret.view = .init_ident();
         ret.shader = try .init(vertex_sh, fragment_sh, null);
         ret.shader.use_prog();
         // set texture channel to zero aka GL_TEXTURE0
         ret.shader.setInt(.image, 0);
         ret.shader.setInt(.palette, 1);
         ret.shader.setMat4(.projection, ret.projection.m);
+        ret.shader.setMat4(.view, ret.view.m);
 
         // zig fmt: off
         const vertices = [_]f32 { 
@@ -378,6 +389,10 @@ pub const IndexedSpriteRenderer = struct {
         self.shader.deinit();
     }
 
+    pub fn set_cam_delta(self: *Self, pos: Vec2) void {
+        self.view = self.view.translate(Vec3.init(-pos.x(), -pos.y(), 0.0));
+    }
+
     pub fn draw(self: Self, texture: Texture2DInd, palette: Texture1D, position: Vec2, rotate: f32, color: Vec3) void {
         // prepare transformations
         self.shader.use_prog();
@@ -395,6 +410,7 @@ pub const IndexedSpriteRenderer = struct {
         model = model.scale(Vec3.init(size_x, size_y, 1.0));
 
         self.shader.setMat4(.model, model.m);
+        self.shader.setMat4(.view, self.view.m);
         self.shader.setVec3(.spriteColor, color.v);
 
         gl.glActiveTexture(gl.GL_TEXTURE0);
