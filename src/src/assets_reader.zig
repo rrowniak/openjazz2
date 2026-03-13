@@ -236,50 +236,8 @@ const FrameDecoder = struct {
     height: u16,
     draw_transparent: bool,
     pixels: []u8,
-
+    
     fn init(allocator: std.mem.Allocator, reader: *std.Io.Reader, w: u16, h: u16) !FrameDecoder {
-        var frame: FrameDecoder = undefined;
-        frame.width = w;
-        frame.height = h;
-        frame.pixels = try allocator.alloc(u8, w * h);
-        @memset(frame.pixels[0..frame.pixels.len], 0);
-        const width = try easy_bit.read(u16, reader);
-        // if (width & 0x7FFF != w) std.debug.print("width({d} != w({d}))\n", .{width & 0x7FFF, w});
-        // height2
-        _ = try easy_bit.read(u16, reader);
-        // if (height & 0x7FFF != h) std.debug.print("height({d} != h({d}))\n", .{height & 0x7FFF, h});
-        frame.draw_transparent = (width & 0x8000) > 0;
-
-        var indx: usize = 0;
-        var last_op_empty = true;
-        while (indx < w * h) {
-            const op = try easy_bit.read(u8, reader);
-            if (op < 0x80)  { // skip `op` pixels
-                indx += op; 
-            } else if (op == 0x80) { // skip to end of line
-                const line_indx = (indx % w);
-                var left_in_line: usize = (w - line_indx);
-                if ((line_indx == 0) and (!last_op_empty)) {
-                    left_in_line = 0;
-                }
-                indx += left_in_line;
-                // indx += 1;
-                // while (indx % w != 0) indx += 1;
-            } else { // op > 0x80 - copy `op & 127` pixels from stream
-                var to_read: usize = op & 0x7F;
-                if (indx + to_read >= frame.pixels.len) to_read = frame.pixels.len - indx;
-                try reader.readSliceAll(frame.pixels[indx..indx + to_read]);
-                indx += to_read;
-            }
-
-            last_op_empty = (op == 0x80);
-        }
-        // if (indx != frame.pixels.len)
-        //     std.debug.print("Read {d} pixels, len {d}\n", .{indx, frame.pixels.len});
-        return frame;
-    }
-
-    fn init_2(allocator: std.mem.Allocator, reader: *std.Io.Reader, w: u16, h: u16) !FrameDecoder {
         var frame: FrameDecoder = undefined;
         frame.width = w;
         frame.height = h;

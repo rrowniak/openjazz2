@@ -57,6 +57,9 @@ pub const Texture2DInd = struct {
         gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE);
         gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_NEAREST);
         gl.glTexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST);
+
+        // this is a critical settings to avoid glitches and distortions
+        gl.glPixelStorei(gl.GL_UNPACK_ALIGNMENT, 1);
         gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_R8, w_, h_, 0, gl.GL_RED, gl.GL_UNSIGNED_BYTE, buf.ptr);
 
         return .{ .tex_id = tex_id, .w = w_, .h = h_ };
