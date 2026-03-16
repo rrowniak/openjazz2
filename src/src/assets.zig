@@ -4,6 +4,11 @@ const gfx = @import("gfx");
 const Texture2D = gfx.gl_utils.Texture2D;
 const Texture2DInd = gfx.gl_utils.Texture2DInd;
 
+const Texture = union(enum) {
+    texture2d: Texture2D,
+    texture2dind: Texture2DInd,
+};
+
 pub const JJ2Version = enum(u16) {
     Unknown = 0x0000,
     BaseGame = 0x0001, // Retail versions 1.20, 1.21, 1.22
@@ -89,9 +94,7 @@ pub const BIT_MASK_SIZE = TILE_SIZE * TILE_SIZE / 8;
 pub const COLL_BIT_MASK = [BIT_MASK_SIZE]u8;
 
 pub const Tile = struct {
-    texture: Texture2D,
-    // for testing purposes, might be needed in future anyway
-    texture_ind: ?Texture2DInd,
+    texture: Texture,
     collision_bit_mask: COLL_BIT_MASK,
     flipped_collision_bit_mask: COLL_BIT_MASK,
 
@@ -121,9 +124,7 @@ pub const Tile = struct {
             // rgba[i * 4 + 3] = 255;
         }
 
-        var t = try @This().init_from_rgba8(rgba, coll_bit_mask, f_coll_bit_mask);
-        t.texture_ind = try Texture2DInd.init_from_indexed(indices, TILE_SIZE, TILE_SIZE);
-        return t;
+        return try .init_from_rgba8(rgba, coll_bit_mask, f_coll_bit_mask);
     }
 
     pub fn init_from_rgba8(
@@ -135,17 +136,15 @@ pub const Tile = struct {
         @memcpy(t.collision_bit_mask[0..BIT_MASK_SIZE], coll_bit_mask[0..BIT_MASK_SIZE]);
         @memcpy(t.flipped_collision_bit_mask[0..BIT_MASK_SIZE], f_coll_bit_mask[0..BIT_MASK_SIZE]);
        
-        t.texture = try Texture2D.init_from_rgba(rgba, TILE_SIZE, TILE_SIZE);
-        t.texture_ind = null;
+        t.texture = .{ .texture2d = try Texture2D.init_from_rgba(rgba, TILE_SIZE, TILE_SIZE)};
         return t;
     }
 
     pub fn deinit(self: Tile) void {
-        self.texture.deinit();
-        if (self.texture_ind) |t| {
-            t.deinit();
+        switch (self.texture) {
+            .texture2d => |t| t.deinit(),
+            .texture2dind => |t| t.deinit(),
         }
-            // self.texture_ind.deinit();
     }
 };
 
@@ -167,7 +166,7 @@ pub const Tileset = struct {
 //
 pub const Frame = struct {
     // sprite: gfx.IndexedSprite,
-    texture: Texture2DInd,
+    texture: Texture,
     width: i16,
     height: i16,
     coldspotX: i16, // Relative to hotspot, collision point?
@@ -202,8 +201,10 @@ pub const Animset = struct {
         for (self.blocks) |b| {
             for (b.anims) |a| {
                 for (a.frames) |f| {
-                    // f.sprite.deinit(self.alloc);
-                    f.texture.deinit();
+                    switch (f.texture) {
+                        .texture2d => |t| t.deinit(),
+                        .texture2dind => |t| t.deinit(),
+                    }
                 }
                 self.alloc.free(a.frames);
             }

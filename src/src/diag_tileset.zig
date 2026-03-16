@@ -86,10 +86,14 @@ pub const DiagTileset = struct {
         const brightness: f32 = 1.0;
         var block_cnt: i32 = 0;
         for (self.tileset.tiles, 0..) |t, i| {
+            const w, const h = switch (t.texture) {
+                .texture2dind => |tex| .{tex.w, tex.h},
+                .texture2d => |tex| .{tex.w, tex.h},
+            };
             if (i != 0 and i % SPR_IN_ROW == 0) {
-                y += t.texture.h;
-                x = block_cnt * SPR_IN_ROW * t.texture.w; 
-                if (y + t.texture.h > self.scr_h) {
+                y += h;
+                x = block_cnt * SPR_IN_ROW * w; 
+                if (y + h > self.scr_h) {
                     block_cnt += 1;
                     y = 0;
                 }
@@ -98,12 +102,11 @@ pub const DiagTileset = struct {
             const position = Vec2.init(@floatFromInt(x), @floatFromInt(y));
             const rotate: f32 = 0;
             const color = Vec3.init(brightness, brightness, brightness);
-            if (t.texture_ind) |tex| {
-                self.renderer_ind.draw(tex, self.palette, position, rotate, color);
-            } else {
-                self.renderer.draw(t.texture, position, rotate, color);
+            switch (t.texture) {
+                .texture2dind => |tex| self.renderer_ind.draw(tex, self.palette, position, rotate, color),
+                .texture2d => |tex| self.renderer.draw(tex, position, rotate, color),
             }
-            x += t.texture.w;
+            x += w;
         }
     }
 

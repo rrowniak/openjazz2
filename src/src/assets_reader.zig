@@ -386,8 +386,7 @@ pub fn load_animset(allocator: std.mem.Allocator, path: []const u8) !assets.Anim
                 f_ptr.hotspotY = frame_info.hotspotY;
                 f_ptr.gunspotX = frame_info.gunspotX;
                 f_ptr.gunspotY = frame_info.gunspotY;
-                // f_ptr.sprite = try .init(allocator, @intCast(f_ptr.width), @intCast(f_ptr.height), f.pixels);
-                f_ptr.texture = try .init_from_indexed(f.pixels, f_ptr.width, f_ptr.height);
+                f_ptr.texture = .{ .texture2dind =  try .init_from_indexed(f.pixels, f_ptr.width, f_ptr.height)};
             }
         }
     

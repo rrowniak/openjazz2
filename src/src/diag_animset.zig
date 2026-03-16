@@ -101,9 +101,9 @@ pub const DiagAnimset = struct {
     }
 
     fn draw(self: *DiagAnimset) void {
-        // const time_sdl: f32 = @floatFromInt(gfx.sdl.SDL_GetTicks());
-        // const time_elapsed = time_sdl * 0.001 / 10;
-        const time_elapsed = self.anim_time;
+        const time_sdl: f32 = @floatFromInt(gfx.sdl.SDL_GetTicks());
+        const time_elapsed = time_sdl * 0.001;
+        // const time_elapsed = self.anim_time;
         var y: i32 = 0;
         for (self.animset.blocks) |*b| {
             if (b.anims.len == 0) {
@@ -126,7 +126,10 @@ pub const DiagAnimset = struct {
                 const position = Vec2.init(@floatFromInt(x), @floatFromInt(y));
                 const rotate: f32 = 0;
                 const color = Vec3.init(brightness, brightness, brightness);
-                self.renderer.draw(anim.frames[f_indx].texture, self.default_p, position, rotate, color);
+                switch (anim.frames[f_indx].texture) {
+                    .texture2dind => |t| self.renderer.draw(t, self.default_p, position, rotate, color),
+                    else => {}
+                }
 
                 x += x_offset;
             }
