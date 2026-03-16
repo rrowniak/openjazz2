@@ -4,7 +4,7 @@ const gfx = @import("gfx");
 const Texture2D = gfx.gl_utils.Texture2D;
 const Texture2DInd = gfx.gl_utils.Texture2DInd;
 
-const Texture = union(enum) {
+pub const Texture = union(enum) {
     texture2d: Texture2D,
     texture2dind: Texture2DInd,
 };

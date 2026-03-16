@@ -90,7 +90,6 @@ pub const DiagAnimset = struct {
                 }
             }
 
-            // handle inputs
             const speed: f32 = 8.0;
             self.renderer.set_cam_delta(app.handle_inputs_simple(speed));
 
