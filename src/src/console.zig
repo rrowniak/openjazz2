@@ -175,35 +175,12 @@ pub const Console = struct {
                 continue;
             }
 
-            const surface = sdl.TTF_RenderText_Blended(
+            const tex = gfx.text_sdl.renderText(
+                self.alloc,
                 self.font,
-                line.ptr,
-                line.len,
+                line,
                 sdl.SDL_Color{ .r = 255, .g = 255, .b = 255, .a = 255 },
-            ) orelse continue;
-            defer sdl.SDL_DestroySurface(surface);
-
-            const rgba_surface = sdl.SDL_ConvertSurface(surface, sdl.SDL_PIXELFORMAT_RGBA32) orelse continue;
-            defer sdl.SDL_DestroySurface(rgba_surface);
-
-            const w: usize = @intCast(rgba_surface.*.w);
-            const h: usize = @intCast(rgba_surface.*.h);
-            const pitch: usize = @intCast(rgba_surface.*.pitch);
-            const src: [*]u8 = @ptrCast(rgba_surface.*.pixels);
-
-            const pixels = self.alloc.alloc(u8, w * h * 4) catch continue;
-            defer self.alloc.free(pixels);
-
-            {
-                var row: usize = 0;
-                while (row < h) : (row += 1) {
-                    const src_row = src[row * pitch .. row * pitch + w * 4];
-                    const dst_row = pixels[row * w * 4 .. (row + 1) * w * 4];
-                    @memcpy(dst_row, src_row);
-                }
-            }
-
-            const tex = gl_utils.Texture2D.init_from_rgba(pixels, w, h) catch continue;
+            ) catch continue;
             defer tex.deinit();
 
             const pos = gfx.math.Vec2.init(self.rect.x + 5, y);

@@ -278,35 +278,12 @@ pub const DiagLevel = struct {
                 const text = std.fmt.allocPrint(self.allocator, "FPS: {d}", .{self.fps}) catch unreachable;
                 defer self.allocator.free(text);
 
-                const font = self.shell.font;
-                const surface = sdl.TTF_RenderText_Blended(
-                    font,
-                    text.ptr,
-                    text.len,
+                self.fps_text_tex = gfx.text_sdl.renderText(
+                    self.allocator,
+                    self.shell.font,
+                    text,
                     sdl.SDL_Color{ .r = 255, .g = 255, .b = 255, .a = 255 },
-                ) orelse unreachable;
-                defer sdl.SDL_DestroySurface(surface);
-
-                const rgba = sdl.SDL_ConvertSurface(surface, sdl.SDL_PIXELFORMAT_RGBA32) orelse unreachable;
-                defer sdl.SDL_DestroySurface(rgba);
-
-                const tw: usize = @intCast(rgba.*.w);
-                const th: usize = @intCast(rgba.*.h);
-                const pitch: usize = @intCast(rgba.*.pitch);
-                const pixels = self.allocator.alloc(u8, tw * th * 4) catch unreachable;
-                defer self.allocator.free(pixels);
-
-                {
-                    var row: usize = 0;
-                    while (row < th) : (row += 1) {
-                        const src: [*]u8 = @ptrCast(rgba.*.pixels);
-                        const src_row = src[row * pitch .. row * pitch + tw * 4];
-                        const dst_row = pixels[row * tw * 4 .. (row + 1) * tw * 4];
-                        @memcpy(dst_row, src_row);
-                    }
-                }
-
-                self.fps_text_tex = gfx.gl_utils.Texture2D.init_from_rgba(pixels, tw, th) catch unreachable;
+                ) catch unreachable;
             }
 
             if (self.fps_text_tex) |tex| {
