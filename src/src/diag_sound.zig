@@ -1,26 +1,30 @@
 const std = @import("std");
 const app = @import("app.zig");
 const assets = @import("assets.zig");
-const gfx = @import("gfx").gfx;
+const gfx = @import("gfx");
+const sdl = gfx.sdl;
+const gl = gfx.gl;
 const utils = @import("utils").utils;
 const asset_reader = @import("assets_reader.zig");
 
 pub const DiagSound = struct {
     allocator: std.mem.Allocator,
-    update_once: bool = false,
+    gfx_sys: gfx.sys,
     openmpt: OpenMPT,
     music: J2bSound,
-    stream: ?*gfx.sdl.SDL_AudioStream,
+    stream: ?*sdl.SDL_AudioStream,
 
     /// Opens an audio stream, loads a .j2b music file via OpenMPT.
     pub fn init(alloc: std.mem.Allocator, j2b_path: []const u8) !DiagSound {
-        var spec: gfx.sdl.SDL_AudioSpec = undefined;
+        const gfx_sys: gfx.sys = try .init("Jazz2 Sound", 640, 480);
+
+        var spec: sdl.SDL_AudioSpec = undefined;
         spec.freq = SAMPLE_RATE;
-        spec.format = gfx.sdl.SDL_AUDIO_S16;
+        spec.format = sdl.SDL_AUDIO_S16;
         spec.channels = CHANNELS;
 
-        const stream = gfx.sdl.SDL_OpenAudioDeviceStream(
-            gfx.sdl.SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
+        const stream = sdl.SDL_OpenAudioDeviceStream(
+            sdl.SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
             &spec,
             null,
             null,
@@ -30,7 +34,7 @@ pub const DiagSound = struct {
             return error.StreamInitFailed;
         }
 
-        if (!gfx.sdl.SDL_ResumeAudioDevice(gfx.sdl.SDL_GetAudioStreamDevice(stream))) {
+        if (!sdl.SDL_ResumeAudioDevice(sdl.SDL_GetAudioStreamDevice(stream))) {
             std.debug.print("Failed to resume audio\n", .{});
             return error.FailResumeAudio;
         }
@@ -44,6 +48,7 @@ pub const DiagSound = struct {
 
         return .{
             .allocator = alloc,
+            .gfx_sys = gfx_sys,
             .openmpt = openmpt,
             .music = music,
             .stream = stream,
@@ -57,16 +62,22 @@ pub const DiagSound = struct {
         } };
     }
 
-    /// Playback loop: clears screen, feeds audio data to the stream once.
+    /// Playback loop: feeds audio data each frame until the user quits.
     fn run(ctx: *anyopaque) void {
         const self: *DiagSound = @ptrCast(@alignCast(ctx));
 
-        self.clear_screen();
-        self.music.progress_play(self.stream);
+        while (true) {
+            var ev: sdl.SDL_Event = undefined;
+            while (sdl.SDL_PollEvent(&ev)) {
+                switch (ev.type) {
+                    sdl.SDL_EVENT_QUIT => return,
+                    else => {},
+                }
+            }
 
-        if (!self.update_once) {
-            // self.sound.play();
-            self.update_once = true;
+            self.clear_screen();
+            self.music.progress_play(self.stream);
+            self.gfx_sys.draw();
         }
     }
 
@@ -75,19 +86,21 @@ pub const DiagSound = struct {
         const self: *DiagSound = @ptrCast(@alignCast(ctx));
         self.music.deinit();
         self.openmpt.deinit();
-        gfx.sdl.SDL_DestroyAudioStream(self.stream);
+        sdl.SDL_DestroyAudioStream(self.stream);
+        self.gfx_sys.deinit();
     }
 
     /// Clears the screen with a time-varying rainbow color.
     fn clear_screen(self: *DiagSound) void {
         _ = self;
-        const now_: f32 = gfx.get_ticks();
+        const now_: f32 = @floatFromInt(sdl.SDL_GetTicks());
         const now = now_ / 1000.0;
         const red: f32 = @floatCast(0.5 + 0.5 * std.math.sin(now));
         const green: f32 = @floatCast(0.5 + 0.5 * std.math.sin(now + std.math.pi * 2.0 / 3.0));
         const blue: f32 = @floatCast(0.5 + 0.5 * std.math.sin(now + std.math.pi * 4.0 / 3.0));
 
-        gfx.clean_screen(red, green, blue);
+        gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT);
+        gl.glClearColor(red, green, blue, 1.0);
     }
 };
 
@@ -216,8 +229,8 @@ const J2bSound = struct {
         }
     }
 
-    /// Placeholder deinit (module is managed by OpenMPT handles).
+    /// Destroys the OpenMPT module.
     fn deinit(self: *J2bSound) void {
-        _ = self;
+        self.openmpt.module_destroy(self.module);
     }
 };
