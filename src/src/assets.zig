@@ -260,8 +260,20 @@ pub const LayerTile = struct {
 pub const Cell = struct { tile: ?LayerTile, event: ?Event};
 
 pub const Layer = struct {
-    // flags: LayerFlags,
     cells: ?[][]Cell,
+    width: usize,
+    height: usize,
+    flags: LayerFlags,
+    type_id: u8,
+    z_axis: i32,
+    offset_x: f32,
+    offset_y: f32,
+    speed_x: f32,
+    speed_y: f32,
+    auto_speed_x: f32,
+    auto_speed_y: f32,
+    texture_bg_type: u8,
+    texture_params_rgb: [3]u8,
 };
 
 pub const Level = struct {

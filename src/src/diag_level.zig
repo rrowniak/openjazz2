@@ -136,70 +136,95 @@ pub const DiagLevel = struct {
         const time_elapsed = time_sdl * 0.001; // in seconds
 
         self.handle_inputs();
-        // Coordinate system transformations
-        // 1. cam_pos to visible rectangle in WorldCoord
-        const visible_rect = self.cam_to_world_rect();
-        // 2. Visible rectangle in WorldCoord to TileCoord
-        const tile_top_left = TileCoord.init_from_world_tl(visible_rect.top_left);
-        const tile_bottom_right = TileCoord.init_from_world_br(visible_rect.bottom_right);
-        // 3. for each tile in the rectangle:
-        for (self.level.layers, 0..) |layer, num| {
-            if (layer.cells == null) {
-                continue;
-            }
-            if (num != 3) {
-                continue;
+
+        const w_2: f32 = @floatFromInt(@divTrunc(self.scr_w, 2));
+        const h_2: f32 = @floatFromInt(@divTrunc(self.scr_h, 2));
+        const cx: f32 = @floatFromInt(self.cam_pos.x);
+        const cy: f32 = @floatFromInt(self.cam_pos.y);
+
+        const base_off_x = @max(0, cx - w_2);
+        const base_off_y = @max(0, cy - h_2);
+
+        //for (&self.level.layers, 0..) |*layer, num| {
+        var numi: i32 = self.level.layers.len - 1;
+        while (numi >= 0) : (numi -= 1) {
+            const num: usize = @intCast(numi);
+            const layer = &self.level.layers[num];
+            if (layer.cells == null) continue;
+            const cells = layer.cells.?;
+
+            // Apply auto-scrolling
+            layer.offset_x += layer.auto_speed_x * time_elapsed;
+            layer.offset_y += layer.auto_speed_y * time_elapsed;
+
+            // Compute layer-specific camera offset (parallax)
+            const layer_off_x = base_off_x * layer.speed_x + layer.offset_x;
+            const layer_off_y = base_off_y * layer.speed_y + layer.offset_y;
+
+            const tile_size_f: f32 = @floatFromInt(TileCoord.SIZE);
+            const scr_w_f: f32 = @floatFromInt(self.scr_w);
+            const scr_h_f: f32 = @floatFromInt(self.scr_h);
+
+            // Compute visible tile range for this layer
+            const tile_start_x: i32 = @intFromFloat(@floor(layer_off_x / tile_size_f));
+            const tile_start_y: i32 = @intFromFloat(@floor(layer_off_y / tile_size_f));
+            const tile_end_x: i32 = @intFromFloat(@ceil((layer_off_x + scr_w_f) / tile_size_f));
+            const tile_end_y: i32 = @intFromFloat(@ceil((layer_off_y + scr_h_f) / tile_size_f));
+
+            const layer_w: i32 = @intCast(layer.width);
+            const layer_h: i32 = @intCast(layer.height);
+            const off_x_int: i32 = @intFromFloat(@floor(layer_off_x));
+            const off_y_int: i32 = @intFromFloat(@floor(layer_off_y));
+
+            // First pass: render tiles
+            {
+                const tile_size_i32: i32 = @intCast(TileCoord.SIZE);
+                var ty: i32 = tile_start_y;
+                while (ty < tile_end_y) : (ty += 1) {
+                    var tx: i32 = tile_start_x;
+                    while (tx < tile_end_x) : (tx += 1) {
+                        const tile_x = if (layer.flags.repeat_x) @mod(tx, layer_w) else tx;
+                        const tile_y = if (layer.flags.repeat_y) @mod(ty, layer_h) else ty;
+
+                        if (tile_x < 0 or tile_x >= layer_w or tile_y < 0 or tile_y >= layer_h) continue;
+
+                        const maybe_lev_tile = cells[@as(usize, @intCast(tile_y))][@as(usize, @intCast(tile_x))].tile;
+                        if (maybe_lev_tile) |lev_tile| {
+                            const sx = tx * tile_size_i32 - off_x_int;
+                            const sy = ty * tile_size_i32 - off_y_int;
+
+                            if (sx + tile_size_i32 < 0 or sx > self.scr_w) continue;
+                            if (sy + tile_size_i32 < 0 or sy > self.scr_h) continue;
+
+                            const idd = lev_tile.id;
+                            const asset_tile = switch (idd) {
+                                assets.TileId.static_tile => |id| self.tileset.tiles[id],
+                                assets.TileId.anim_tile => |id| blk: {
+                                    const anim = self.level.animated_tiles[id];
+                                    const frame_no = g_anim.calc_curr_frame(time_elapsed, anim.frame_count, anim.speed, anim.is_ping_pong);
+                                    const frame_id = anim.frames[frame_no];
+                                    break :blk self.tileset.tiles[frame_id];
+                                },
+                            };
+                            self.render_tex(asset_tile.texture, self.palettes[0], sx, sy);
+                        }
+                    }
+                }
             }
 
-            for (tile_top_left.y..tile_bottom_right.y) |y| {
-                if (y >= layer.cells.?.len) {
-                    break;
-                }
-                for (tile_top_left.x..tile_bottom_right.x) |x| {
-                    if (x >= layer.cells.?[y].len) {
-                        break;
-                    }
-                    const lev_tile = layer.cells.?[y][x].tile.?;
-                    // convert back to the WorldCoord
-                    const tile_word = WorldCoord{ .x = @intCast(x * TileCoord.SIZE), .y = @intCast(y * TileCoord.SIZE) };
-                    // convert to the Screen Coord
-                    const scr_coord = self.world_to_screen(tile_word);
-                    // render if on the screen
-                    if (scr_coord) |scr| {
-                        const idd = lev_tile.id;
-                        const asset_tile = switch (idd) {
-                            assets.TileId.static_tile => |id| blk: {
-                                break :blk self.tileset.tiles[id];
-                            },
-                            assets.TileId.anim_tile => |id| blk: {
-                                // calculate current frame number
-                                const anim = self.level.animated_tiles[id];
-                                const frame_no = g_anim.calc_curr_frame(time_elapsed, anim.frame_count, anim.speed, anim.is_ping_pong);
-                                const frame_id = anim.frames[frame_no];
-                                break :blk self.tileset.tiles[frame_id];
-                            },
-                        };
-                        self.render_tex(asset_tile.texture, self.palettes[0], scr.x, scr.y);
-                    }
-                }
-            }
+            // Second pass: render events (only layer 3)
+            if (num == 3) {
+                const tile_size_i32: i32 = @intCast(TileCoord.SIZE);
+                var ty: i32 = tile_start_y;
+                while (ty < tile_end_y) : (ty += 1) {
+                    if (ty < 0 or ty >= layer_h) continue;
+                    var tx: i32 = tile_start_x;
+                    while (tx < tile_end_x) : (tx += 1) {
+                        if (tx < 0 or tx >= layer_w) continue;
+                        if (cells[@as(usize, @intCast(ty))][@as(usize, @intCast(tx))].event) |ev| {
+                            const sx = tx * tile_size_i32 - off_x_int;
+                            const sy = ty * tile_size_i32 - off_y_int;
 
-            for (tile_top_left.y..tile_bottom_right.y) |y| {
-                if (y >= layer.cells.?.len) {
-                    break;
-                }
-                for (tile_top_left.x..tile_bottom_right.x) |x| {
-                    if (x >= layer.cells.?[y].len) {
-                        break;
-                    }
-                    // convert back to the WorldCoord
-                    const tile_word = WorldCoord{ .x = @intCast(x * TileCoord.SIZE), .y = @intCast(y * TileCoord.SIZE) };
-                    // convert to the Screen Coord
-                    const scr_coord = self.world_to_screen(tile_word);
-                    // render if on the screen
-                    if (scr_coord) |scr| {
-                        if (layer.cells.?[y][x].event) |ev| {
-                            //render event
                             var palette_id: usize = 0;
                             if (@intFromEnum(ev.id) >= @intFromEnum(asset_maps.EventId.RedGemPlus1) and @intFromEnum(ev.id) <= @intFromEnum(asset_maps.EventId.PurpleGemPlus1)) {
                                 palette_id = @intFromEnum(ev.id) - @intFromEnum(asset_maps.EventId.RedGemPlus1) + 1;
@@ -208,7 +233,7 @@ pub const DiagLevel = struct {
                                 const a = &self.animset.blocks[anim.animblock].anims[anim.anim];
                                 const frame = g_anim.calc_curr_frame_for_anim(time_elapsed * 10.0, a);
                                 const obj = a.frames[frame];
-                                self.render_tex(obj.texture, self.palettes[palette_id], scr.x + obj.hotspotX + 16, scr.y + obj.hotspotY + 16);
+                                self.render_tex(obj.texture, self.palettes[palette_id], sx + obj.hotspotX + 16, sy + obj.hotspotY + 16);
                             }
                         }
                     }

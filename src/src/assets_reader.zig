@@ -609,7 +609,8 @@ pub fn load_level(allocator: std.mem.Allocator, path: []const u8) !assets.Level 
     var layers: [8]assets.Layer = undefined;
 
     for (0..8) |layer_num| {
-        // layers[layer_num].flags = assets.LayerFlags{};
+        const flags: assets.LayerFlags = @bitCast(@as(u5, @truncate(lev_info.layer_flags[layer_num])));
+
         if (lev_info.layer_main[layer_num]) {
             const size_y: usize = @intCast(lev_info.layer_height[layer_num]);
             layers[layer_num].cells = try allocator.alloc([]assets.Cell, size_y);
@@ -671,6 +672,20 @@ pub fn load_level(allocator: std.mem.Allocator, path: []const u8) !assets.Level 
         } else {
             layers[layer_num].cells = null;
         }
+
+        layers[layer_num].width = @intCast(lev_info.layer_width[layer_num]);
+        layers[layer_num].height = @intCast(lev_info.layer_height[layer_num]);
+        layers[layer_num].flags = flags;
+        layers[layer_num].type_id = lev_info.layer_type[layer_num];
+        layers[layer_num].z_axis = lev_info.layer_z_axis[layer_num];
+        layers[layer_num].offset_x = @as(f32, @floatFromInt(lev_info.layer_offset_x[layer_num])) / 65536.0;
+        layers[layer_num].offset_y = @as(f32, @floatFromInt(lev_info.layer_offset_y[layer_num])) / 65536.0;
+        layers[layer_num].speed_x = @as(f32, @floatFromInt(lev_info.layer_speed_x[layer_num])) / 65536.0;
+        layers[layer_num].speed_y = @as(f32, @floatFromInt(lev_info.layer_speed_y[layer_num])) / 65536.0;
+        layers[layer_num].auto_speed_x = @as(f32, @floatFromInt(lev_info.layer_auto_speed_x[layer_num])) / 65536.0;
+        layers[layer_num].auto_speed_y = @as(f32, @floatFromInt(lev_info.layer_auto_speed_y[layer_num])) / 65536.0;
+        layers[layer_num].texture_bg_type = lev_info.layer_texture_background_type[layer_num];
+        layers[layer_num].texture_params_rgb = lev_info.layer_texture_params_rgb[layer_num];
     }
 
     // TODO: Load MLLE
