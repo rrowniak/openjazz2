@@ -1,5 +1,5 @@
 const std = @import("std");
-/// Reads a binary representation of a struct `T` from the given `reader`.
+/// Reads a struct from a binary reader by iterating over its fields (alternative to easy_bit).
 pub fn readStruct2(comptime T: type, reader: anytype) !T {
     var result: T = undefined;
     const fields = std.meta.fields(T);
@@ -39,6 +39,7 @@ pub fn readStruct2(comptime T: type, reader: anytype) !T {
     return result;
 }
 
+/// Converts a 256-color palette to a human-readable string (for debugging).
 pub fn paletteToString(allocator: std.mem.Allocator, palette: [256]u32) ![]u8 {
     var list: std.ArrayList(u8) = try .initCapacity(allocator, 1024);
     defer list.deinit(allocator);

@@ -16,6 +16,7 @@ pub const Texture1D = struct {
     const Self = @This();
     tex_id: gl.GLuint,
 
+    /// Creates a 1D texture from a 256-entry RGBA palette.
     pub fn init_from_palette_rgba(buf: *const [256]u32) !Self {
         var tex_id: gl.GLuint = 0;
         gl.glGenTextures(1, &tex_id);
@@ -30,10 +31,12 @@ pub const Texture1D = struct {
         return .{ .tex_id = tex_id };
     }
 
+    /// Binds this 1D palette texture to GL_TEXTURE_1D.
     pub fn bind(self: Self) void {
         gl.glBindTexture(gl.GL_TEXTURE_1D, self.tex_id);
     }
 
+    /// Deletes the 1D texture from OpenGL.
     pub fn deinit(self: Self) void {
         gl.glDeleteTextures(1, &self.tex_id);
     }
@@ -45,6 +48,7 @@ pub const Texture2DInd = struct {
     w: i32,
     h: i32,
 
+    /// Creates a 2D texture from 8-bit indexed pixel data (single-channel R8).
     pub fn init_from_indexed(buf: []const u8, w: anytype, h: anytype) !Self {
         const w_ = if (@TypeOf(w) == i32) w else @as(i32, @intCast(w));
         const h_ = if (@TypeOf(h) == i32) h else @as(i32, @intCast(h));
@@ -65,10 +69,12 @@ pub const Texture2DInd = struct {
         return .{ .tex_id = tex_id, .w = w_, .h = h_ };
     }
 
+    /// Binds this indexed 2D texture to GL_TEXTURE_2D.
     pub fn bind(self: Self) void {
         gl.glBindTexture(gl.GL_TEXTURE_2D, self.tex_id);
     }
 
+    /// Deletes the indexed 2D texture from OpenGL.
     pub fn deinit(self: Self) void {
         gl.glDeleteTextures(1, &self.tex_id);
     }
@@ -80,6 +86,7 @@ pub const Texture2D = struct {
     w: i32,
     h: i32,
 
+    /// Creates a 2D RGBA texture with mipmap generation.
     pub fn init_from_rgba(buf: []const u8, w: anytype, h: anytype) !Self {
         const w_ = if (@TypeOf(w) == i32) w else @as(i32, @intCast(w));
         const h_ = if (@TypeOf(h) == i32) h else @as(i32, @intCast(h));
@@ -98,10 +105,12 @@ pub const Texture2D = struct {
         return .{ .tex_id = tex_id, .w = w_, .h = h_ };
     }
 
+    /// Binds this RGBA 2D texture to GL_TEXTURE_2D.
     pub fn bind(self: Self) void {
         gl.glBindTexture(gl.GL_TEXTURE_2D, self.tex_id);
     }
 
+    /// Deletes the RGBA 2D texture from OpenGL.
     pub fn deinit(self: Self) void {
         gl.glDeleteTextures(1, &self.tex_id);
     }
@@ -115,6 +124,7 @@ pub fn ShaderProgram(comptime Uniforms: type) type {
         program_id: gl.GLuint,
         uniforms_map: [UniformsLen]gl.GLint,
 
+        /// Compiles vertex/fragment (and optional geometry) shaders into a linked program.
         pub fn init(
             vertex_code: [:0]const u8,
             fragment_code: [:0]const u8,
@@ -181,6 +191,7 @@ pub fn ShaderProgram(comptime Uniforms: type) type {
             };
         }
 
+        /// Compiles a single shader object from source code.
         fn compile(shader_id: gl.GLuint, shader_code: [*c]const u8) !void {
             gl.glShaderSource(
                 shader_id,
@@ -195,6 +206,7 @@ pub fn ShaderProgram(comptime Uniforms: type) type {
             try shader_status("Shader compile error", shader_id, gl.GL_COMPILE_STATUS);
         }
 
+        /// Checks shader compile or program link status; prints error on failure.
         fn shader_status(pref: []const u8, shader_id: gl.GLuint, status: gl.GLenum) !void {
             var success: gl.GLint = 0;
 
@@ -215,34 +227,42 @@ pub fn ShaderProgram(comptime Uniforms: type) type {
             // }
         }
 
+        /// Placeholder deinit (shaders are deleted during init after linking).
         pub fn deinit(self: Self) void {
             _ = self;
         }
 
+        /// Activates this shader program for rendering.
         pub fn use_prog(self: Self) void {
             gl.glUseProgram(self.program_id);
         }
 
+        /// Sets a mat4 uniform in the shader.
         pub fn setMat4(self: Self, comptime uniform: Uniforms, mat: [16]gl.GLfloat) void {
             gl.glUniformMatrix4fv(self.uniforms_map[@intFromEnum(uniform)], 1, 0, &mat);
         }
 
+        /// Sets a vec2 uniform in the shader.
         pub fn setVec2(self: Self, comptime uniform: Uniforms, vec: [2]gl.GLfloat) void {
             gl.glUniform2fv(self.uniforms_map[@intFromEnum(uniform)], 1, &vec);
         }
 
+        /// Sets a vec3 uniform in the shader.
         pub fn setVec3(self: Self, comptime uniform: Uniforms, vec: [3]gl.GLfloat) void {
             gl.glUniform3fv(self.uniforms_map[@intFromEnum(uniform)], 1, &vec);
         }
 
+        /// Sets a vec4 uniform in the shader.
         pub fn setVec4(self: Self, comptime uniform: Uniforms, vec: [4]gl.GLfloat) void {
             gl.glUniform4fv(self.uniforms_map[@intFromEnum(uniform)], 1, &vec);
         }
 
+        /// Sets an int uniform in the shader.
         pub fn setInt(self: Self, comptime uniform: Uniforms, i: gl.GLint) void {
             gl.glUniform1i(self.uniforms_map[@intFromEnum(uniform)], i);
         }
 
+        /// Sets a float uniform in the shader.
         pub fn setFloat(self: Self, comptime uniform: Uniforms, f: f64) void {
             gl.glUniform1f(self.uniforms_map[@intFromEnum(uniform)], f);
         }
@@ -258,6 +278,7 @@ pub const SpriteRenderer = struct {
     projection: Mat4x4,
     view: Mat4x4,
 
+    /// Initializes the SpriteRenderer: sets up ortho projection, compiles shader, creates quad VAO.
     pub fn init(vertex_sh: [:0]const u8, fragment_sh: [:0]const u8, w: f32, h: f32) !Self {
         var ret: Self = undefined;
         ret.projection = .init_ortho(0.0, w, h, 0.0, -1.0, 1.0);
@@ -298,15 +319,18 @@ pub const SpriteRenderer = struct {
         return ret;
     }
 
+    /// Deletes the VAO and shader for this sprite renderer.
     pub fn deinit(self: Self) void {
         gl.glDeleteVertexArrays(1, &self.quadVAO);
         self.shader.deinit();
     }
 
+    /// Translates the view matrix by the camera movement delta.
     pub fn set_cam_delta(self: *Self, pos: Vec2) void {
         self.view = self.view.translate(Vec3.init(-pos.x(), -pos.y(), 0.0));
     }
 
+    /// Renders a Texture2D sprite at the given position with rotation and color.
     pub fn draw(self: Self, texture: Texture2D, position: Vec2, rotate: f32, color: Vec3) void {
         // prepare transformations
         self.shader.use_prog();
@@ -346,6 +370,7 @@ pub const IndexedSpriteRenderer = struct {
     projection: Mat4x4,
     view: Mat4x4,
 
+    /// Initializes the IndexedSpriteRenderer: ortho projection, shader, quad VAO, palette channel.
     pub fn init(vertex_sh: [:0]const u8, fragment_sh: [:0]const u8, scr_w: f32, scr_h: f32) !Self {
         var ret: Self = undefined;
         ret.projection = .init_ortho(0.0, scr_w, scr_h, 0.0, -1.0, 1.0);
@@ -387,15 +412,18 @@ pub const IndexedSpriteRenderer = struct {
         return ret;
     }
 
+    /// Deletes the VAO and shader for this indexed sprite renderer.
     pub fn deinit(self: Self) void {
         gl.glDeleteVertexArrays(1, &self.quadVAO);
         self.shader.deinit();
     }
 
+    /// Translates the view matrix by the camera movement delta.
     pub fn set_cam_delta(self: *Self, pos: Vec2) void {
         self.view = self.view.translate(Vec3.init(-pos.x(), -pos.y(), 0.0));
     }
 
+    /// Renders an indexed sprite with palette lookup at the given position.
     pub fn draw(self: Self, texture: Texture2DInd, palette: Texture1D, position: Vec2, rotate: f32, color: Vec3) void {
         // prepare transformations
         self.shader.use_prog();

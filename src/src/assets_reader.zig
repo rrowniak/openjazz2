@@ -15,10 +15,12 @@ comptime {
     }
 }
 
+/// Reads a struct with slice fields from a binary stream using easy_bit's read_dyn.
 fn readStructWithSlices_(comptime T: type, v: *T, reader: anytype) !void {
     _ = try easy_bit.read_dyn(T, reader, v, .little);
 }
 
+/// Decompresses a zlib-compressed block from a file, returning the uncompressed data.
 fn decompress(allocator: std.mem.Allocator, file: anytype, c_size: usize, u_size: usize) ![]u8 {
     // read c_size bytes from the file
     const input: []u8 = try allocator.alloc(u8, c_size);
@@ -78,6 +80,7 @@ const TilesetInfo = struct {
     mask_offset: []u32, // clipping or tile mask
     flipped_mask_offset: []u32,
 
+    /// Allocates tile metadata arrays for the tileset info (size depends on version).
     fn init_arrays_only(allocator: std.mem.Allocator, version: u16) !TilesetInfo {
         const size: usize = if (version <= 0x200) 1024 else 4096; 
         return .{
@@ -94,6 +97,7 @@ const TilesetInfo = struct {
         }; 
     }
 
+    /// Frees the tile metadata arrays allocated by init_arrays_only.
     fn deinit(self: TilesetInfo, allocator: std.mem.Allocator) void {
         allocator.free(self.tile_opaque);
         allocator.free(self.unknown_1);
@@ -106,6 +110,7 @@ const TilesetInfo = struct {
     }
 };
 
+/// Loads a .j2t tileset file: reads header, decompresses blocks, and constructs tiles.
 pub fn load_tileset(allocator: std.mem.Allocator, path: []const u8) !assets.Tileset {
     info("Loading tileset {s}", .{path});
     var file = try std.fs.cwd().openFile(path, .{});
@@ -237,6 +242,7 @@ const FrameDecoder = struct {
     draw_transparent: bool,
     pixels: []u8,
     
+    /// Decodes a single animation frame from the reader using RLE-like opcodes.
     fn init(allocator: std.mem.Allocator, reader: *std.Io.Reader, w: u16, h: u16) !FrameDecoder {
         var frame: FrameDecoder = undefined;
         frame.width = w;
@@ -271,6 +277,7 @@ const FrameDecoder = struct {
         return frame;
     }
 
+    /// Frees the decoded pixel buffer.
     fn deinit(self: FrameDecoder, allocator: std.mem.Allocator) void {
         allocator.free(self.pixels);
     }
@@ -297,15 +304,18 @@ const SampleData = struct {
     data: []u8,
     unknown_1: u32,
 
+    /// Allocates a buffer for sample data of the given size.
     fn init(allocator: std.mem.Allocator, size: usize) !SampleData {
         return .{ .data = try allocator.alloc(u8, size), .unknown_1 = undefined};
     }
 
+    /// Frees the sample data buffer.
     fn deinit(self: SampleData, allocator: std.mem.Allocator) void {
         allocator.free(self.data);
     }
 };
 
+/// Loads a .j2a animation set: reads the ALIB header, decompresses blocks, builds anims and samples.
 pub fn load_animset(allocator: std.mem.Allocator, path: []const u8) !assets.Animset {
     info("Loading animset {s}", .{path});
     var file = try std.fs.cwd().openFile(path, .{});
@@ -509,6 +519,7 @@ const LevelInfo = struct {
     // TODO: UnknownAGA 32768 bytes
     animated_tiles: []AnimatedTile,
     
+    /// Allocates tile-level metadata arrays (size depends on version: 1024 or 4096 tiles).
     fn init(allocator: std.mem.Allocator, version: u16) !LevelInfo {
         const tile_count: usize = if (version <= 0x202) 1024 else 4096;
         var ret: LevelInfo = undefined;
@@ -522,6 +533,7 @@ const LevelInfo = struct {
         return ret;
     }
 
+    /// Frees tile metadata arrays (tileset_events, tile_flipped, tile_types, tile_x_mask).
     fn deinit(self: *LevelInfo, allocator: std.mem.Allocator) void {
         allocator.free(self.tileset_events);
         allocator.free(self.tile_flipped);
@@ -541,6 +553,7 @@ pub const AnimatedTile = struct {
     frames: [64]u16,
 };
 
+/// Loads a .j2l level file: reads LEVL header, decompresses blocks, parses events and tile layout.
 pub fn load_level(allocator: std.mem.Allocator, path: []const u8) !assets.Level {
     info("Loading level {s}", .{path});
     var file = try std.fs.cwd().openFile(path, .{});
@@ -685,6 +698,7 @@ pub fn load_level(allocator: std.mem.Allocator, path: []const u8) !assets.Level 
     return ret;
 }
 
+/// Extracts an Event from a raw u32 (the low byte is the EventId).
 fn parse_event(ev_raw: u32) ?assets.Event {
     const id: u8 = @intCast(ev_raw & 0xFF);
     if (id == 0) {
@@ -703,6 +717,7 @@ const MusicHeader = struct {
     UData: u32,
 };
 
+/// Loads a .j2b music file: reads MUSE header, decompresses the content block.
 pub fn load_music(allocator: std.mem.Allocator, path: []const u8) !struct{format: u32, data:[]u8} {
     info("Loading music {s}", .{path});
     var file = try std.fs.cwd().openFile(path, .{});

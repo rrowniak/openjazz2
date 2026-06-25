@@ -7,6 +7,7 @@ const std = @import("std");
 /// Given a possibly case-wrong path, return the actual filename on disk.
 /// Returns an allocated string containing the corrected full path.
 /// Caller owns the memory.
+/// Finds a file in a directory by case-insensitive name matching.
 pub fn find_file_case_insensitive(
     allocator: std.mem.Allocator,
     dirname: []const u8,
@@ -32,6 +33,7 @@ pub fn find_file_case_insensitive(
 /// Reads a given filename into a newly allocated buffer.
 /// The size of the buffer is equal to the file size.
 /// Caller owns the memory.
+/// Reads an entire file into a newly allocated buffer.
 pub fn read_file_to_buff(
     allocator: std.mem.Allocator,
     filename: []const u8,

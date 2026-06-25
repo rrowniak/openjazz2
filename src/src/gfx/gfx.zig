@@ -16,18 +16,22 @@ var g_alloc = std.heap.GeneralPurposeAllocator(.{}){};
 
 var g_mixer: ?*sdl.MIX_Mixer = null;
 
+/// Returns the current screen resolution as width and height.
 pub fn screen_res() struct {w: usize, h: usize} {
     return .{.w = @intCast(g_screen_w), .h = @intCast(g_screen_h)};
 }
 
+/// Returns the global SDL renderer pointer.
 pub fn get_renderer() *sdl.SDL_Renderer {
     return g_sdl_renderer.?;
 }
 
+/// Returns the global SDL window pointer.
 pub fn get_window() *sdl.SDL_Window {
     return g_sdl_window.?;
 }
 
+/// Initializes SDL video/audio, SDL_ttf, and SDL_mixer.
 pub fn init() !void {
     if (!sdl.SDL_Init(sdl.SDL_INIT_VIDEO | sdl.SDL_INIT_AUDIO)) {
         std.debug.print("SDL init failed: {s}\n", .{sdl.SDL_GetError()});
@@ -42,6 +46,7 @@ pub fn init() !void {
     g_mixer = sdl.MIX_CreateMixerDevice(sdl.SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, null);
 }
 
+/// Creates the SDL window and renderer with logical presentation.
 pub fn init_window() void {
      const r = sdl.SDL_CreateWindowAndRenderer(
         "OpenJazz", 
@@ -64,10 +69,12 @@ pub fn init_window() void {
     // }
 }
 
+/// Returns false once a quit event has been received.
 pub fn is_running() bool {
     return g_is_running;
 }
 
+/// Polls all pending SDL events and stores them for later retrieval.
 pub fn update_frame() void {
     var sdl_event: sdl.SDL_Event = undefined;
     while (sdl.SDL_PollEvent(&sdl_event)) {
@@ -79,10 +86,12 @@ pub fn update_frame() void {
     }
 }
 
+/// Returns the list of buffered SDL events from the last frame.
 pub fn get_events() []const sdl.SDL_Event {
     return g_sdl_events.items[0..];
 }
 
+/// Presents the rendered frame and clears the event buffer.
 pub fn render() void {
     _ = sdl.SDL_RenderPresent(g_sdl_renderer);
     g_sdl_events.clearRetainingCapacity();
@@ -93,6 +102,7 @@ pub const Sprite = struct {
     w: usize,
     h: usize,
 
+    /// Creates a sprite from RGBA pixel data.
     pub fn init_from_rgba(buf: []const u8, w: usize, h: usize) !Sprite {
         const surface = sdl.SDL_CreateSurfaceFrom(
             @intCast(w), @intCast(h),
@@ -117,6 +127,7 @@ pub const Sprite = struct {
         return r;
     }
 
+    /// Renders the sprite at the given screen coordinates.
     pub fn draw(self: Sprite, x: i32, y: i32) void {
 
         const dst: sdl.SDL_FRect = .{
@@ -128,6 +139,7 @@ pub const Sprite = struct {
         _ = sdl.SDL_RenderTexture(g_sdl_renderer, self.texture, null, &dst);
     }
 
+    /// Renders the sprite at integer coordinates (alias for draw).
     pub fn draw_i32(self: Sprite, x: i32, y: i32) void {
 
         const dst: sdl.SDL_FRect = .{
@@ -140,6 +152,7 @@ pub const Sprite = struct {
     }
 
 
+    /// Destroys the sprite's SDL texture.
     pub fn deinit(self: Sprite) void {
         sdl.SDL_DestroyTexture(self.texture);
     }
@@ -151,6 +164,7 @@ pub const IndexedSprite = struct {
     w: usize,
     h: usize,
    
+    /// Creates an indexed sprite with an 8-bit pixel surface.
     pub fn init(allocator: std.mem.Allocator, 
         w: usize, h: usize, indexes: []const u8) !IndexedSprite {
         const pixels: [] u8 = try allocator.alloc(u8, w * h);
@@ -172,6 +186,7 @@ pub const IndexedSprite = struct {
         return ret;
     }
 
+    /// Applies a 256-color palette to the indexed sprite surface.
     pub fn set_palette(self: IndexedSprite, palette: [256]u32) !void {
         const pal = sdl.SDL_CreatePalette(256) orelse return error.PaletteCreateFailed;
         defer sdl.SDL_DestroyPalette(pal);
@@ -190,6 +205,7 @@ pub const IndexedSprite = struct {
         
     }
 
+    /// Converts the indexed sprite to an RGBA sprite via SDL texture.
     pub fn to_sprite(self: IndexedSprite) !Sprite {
         return .{
             .texture = sdl.SDL_CreateTextureFromSurface(g_sdl_renderer, self.surface) orelse
@@ -199,6 +215,7 @@ pub const IndexedSprite = struct {
         };
     }
 
+    /// Converts to sprite with debug pixel info printed first.
     pub fn to_sprite_debug(self: IndexedSprite) !Sprite {
         self.print_pixels();       
         return .{
@@ -209,11 +226,13 @@ pub const IndexedSprite = struct {
         };
     }
 
+    /// Frees the surface and pixel buffer of the indexed sprite.
     pub fn deinit(self: IndexedSprite, allocator: std.mem.Allocator) void {
         sdl.SDL_DestroySurface(self.surface); 
         allocator.free(self.pixels); 
     }
 
+    /// Debug: prints pixel data of the sprite surface to stdout.
     pub fn print_pixels(self: IndexedSprite) void {
         const w = self.surface.w;
         const h = self.surface.h;
@@ -254,15 +273,18 @@ pub const IndexedSprite = struct {
     }
 };
 
+/// Returns the elapsed time in seconds since SDL was initialized.
 pub fn get_ticks() f32 {
     return @floatFromInt(sdl.SDL_GetTicks());
 }
 
+/// Clears the screen with the given RGB color using the SDL renderer.
 pub fn clean_screen(r: f32, g: f32, b: f32) void {
     _ = sdl.SDL_SetRenderDrawColorFloat(g_sdl_renderer, r, g, b, sdl.SDL_ALPHA_OPAQUE_FLOAT); 
     _ = sdl.SDL_RenderClear(g_sdl_renderer);
 }
 
+/// Shuts down SDL_mixer, SDL_ttf, SDL renderer, window, and SDL itself.
 pub fn deinit() void {
     sdl.MIX_Quit();
     sdl.TTF_Quit();
@@ -280,6 +302,7 @@ pub fn deinit() void {
 pub const Sound = struct {
     chunk: *sdl.MIX_Audio,
 
+    /// Creates a sound from raw PCM data with a standard audio spec.
     pub fn init_from_raw(data: []const u8) !@This() {
         const audiospec = sdl.SDL_AudioSpec {
             .freq = 44100,
@@ -291,16 +314,19 @@ pub const Sound = struct {
         };
     }
 
+    /// Plays the sound chunk on the default mixer.
     pub fn play(self: *@This()) void {
         _ = sdl.MIX_PlayAudio(g_mixer, self.chunk);
     }
 
+    /// Placeholder deinit for Sound (audio cleanup not yet implemented).
     pub fn deinit(self: *@This()) void {
         _ = self;
         // sdl.MIX_DestroyAudio(self.chunk);
     }
 };
 
+/// Test helper: opens an audio device, queues raw PCM, and waits for playback.
 fn test_audio(sample_rate: u32, data: []const u8) void {
     // ... prerequisite: initialize SDL with SDL_Init(SDL_INIT_AUDIO);
     const bytesPerSample = 1; //???

@@ -25,6 +25,7 @@ pub const DiagAnimset = struct {
     scr_h: usize,
     anim_time: f32,
 
+    /// Initializes the animation viewer: sets up graphics, loads the animset file.
     pub fn init(alloc: std.mem.Allocator, j2a_path: []const u8) !DiagAnimset {
         const gfx_sys: gfx.sys = try .init("Jazz2", 1400, 800);
         const vertex_sh = @embedFile("./gfx/glsl/sprite.vert.glsl");
@@ -49,6 +50,7 @@ pub const DiagAnimset = struct {
         };
     }
 
+    /// IApp deinit callback: cleans up renderer, animset, and graphics system.
     fn deinit(ctx: *anyopaque) void {
         const self: *DiagAnimset = @ptrCast(@alignCast(ctx));
 
@@ -57,6 +59,7 @@ pub const DiagAnimset = struct {
         self.gfx_sys.deinit();
     }
 
+    /// Wraps this diagnostic viewer into the generic IApp interface.
     pub fn app_cast(self: *DiagAnimset) app.IApp {
         return .{ .ptr = self, .vtable = &.{
             .run = run,
@@ -64,6 +67,7 @@ pub const DiagAnimset = struct {
         } };
     }
 
+    /// Main loop: polls events, handles camera input, draws all animations.
     fn run(ctx: *anyopaque) void {
         const self: *DiagAnimset = @ptrCast(@alignCast(ctx));
         // main loop
@@ -99,6 +103,7 @@ pub const DiagAnimset = struct {
         }
     }
 
+    /// Renders all animation blocks and their frames at the current time.
     fn draw(self: *DiagAnimset) void {
         const time_sdl: f32 = @floatFromInt(gfx.sdl.SDL_GetTicks());
         const time_elapsed = time_sdl * 0.001;
@@ -136,6 +141,7 @@ pub const DiagAnimset = struct {
         }
     }
 
+    /// Clears the screen to black using OpenGL.
     fn clear_screen(self: *DiagAnimset) void {
         _ = self;
         // const now_: f32 = @floatFromInt(sdl.SDL_GetTicks());

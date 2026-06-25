@@ -12,6 +12,7 @@ const CommandFn = *const fn (alloc: std.mem.Allocator, ctx: *anyopaque, args: []
 const FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf";
 const PROMPT = "jazz2> ";
 
+/// Built-in help command: returns a help string for the console.
 fn help(alloc: std.mem.Allocator, ctx: *anyopaque, args: []const u8) ?[]const u8 {
     _ = args;
     const self: *Console = @ptrCast(@alignCast(ctx));
@@ -26,6 +27,7 @@ const Lines = struct {
     lines: std.array_list.Managed([]const u8),
     limit: usize = 255,
 
+    /// Creates an empty line buffer with a default limit of 255 lines.
     fn init(alloc: std.mem.Allocator) @This() {
         return .{
             .alloc = alloc,
@@ -33,6 +35,7 @@ const Lines = struct {
         };
     }
 
+    /// Frees all stored lines and the list itself.
     fn deinit(self: *@This()) void {
         for (self.lines.items) |l| {
             self.alloc.free(l);
@@ -40,11 +43,13 @@ const Lines = struct {
         self.lines.deinit();
     }
 
+    /// Appends a line to the history, maintaining the size limit.
     fn append_line(self: *@This(), line: []const u8) !void {
         try self.lines.append(try self.alloc.dupe(u8, line));
         self.maintain_limit();
     }
 
+    /// Removes oldest lines if the total exceeds the configured limit.
     fn maintain_limit(self: *@This()) void {
         if (self.lines.items.len > self.limit) {
             const remove = self.lines.items.len - self.limit;
@@ -71,6 +76,7 @@ pub const Console = struct {
     cursor_visible: bool = true,
     last_blink_ms: u64 = 0,
 
+    /// Initializes the console: loads font, registers built-in help command.
     pub fn init(alloc: std.mem.Allocator) !@This() {
         var lines = Lines.init(alloc);
         try lines.append_line("Jazz Jackrabbit 2 Console");
@@ -87,12 +93,14 @@ pub const Console = struct {
         return c;
     }
 
+    /// Frees commands map, text history, and input buffer.
     pub fn deinit(self: *@This()) void {
         self.commands.deinit();
         self.text.deinit();
         self.input.deinit();
     }
 
+    /// Opens or closes the in-game console overlay.
     pub fn toggle_onoff(self: *@This()) void {
         self.enabled = !self.enabled;
 
@@ -105,6 +113,7 @@ pub const Console = struct {
         }
     }
 
+    /// Registers a new console command by name with its handler function and context.
     pub fn register_cmd(self: *@This(), name: []const u8, cmd: CommandFn, ctx: *anyopaque) void {
         var entry = self.commands.getOrPut(name) catch {
             return;
@@ -112,6 +121,7 @@ pub const Console = struct {
         entry.value_ptr.* = .{ .fun = cmd, .ctx = ctx };
     }
 
+    /// Renders the console background, text, and cursor if enabled. Processes input events.
     pub fn render_shell(self: *@This()) void {
         if (self.enabled) {
             self.update_cursor();
@@ -187,10 +197,12 @@ pub const Console = struct {
         self.render_runtime();
     }
 
+    /// Placeholder for runtime overlay rendering (currently unused).
     fn render_runtime(self: @This()) void {
         _ = self;
     }
 
+    /// Processes a single SDL event: text input and backspace/enter keys.
     fn handle_event(self: *@This(), event: *const sdl.SDL_Event) void {
         switch (event.type) {
             sdl.SDL_EVENT_TEXT_INPUT => {
@@ -221,6 +233,7 @@ pub const Console = struct {
         }
     }
 
+    /// Stores the current input as a history line and executes it as a command.
     fn submit_line(self: *@This()) void {
         if (self.input.items.len == 0)
             return;
@@ -236,6 +249,7 @@ pub const Console = struct {
         self.input.clearRetainingCapacity();
     }
 
+    /// Parses the input buffer as a command, looks it up, and runs the handler.
     fn execute_command(self: *@This()) void {
         var it = std.mem.tokenizeScalar(u8, self.input.items, ' ');
         if (it.next()) |cmd| {
@@ -251,6 +265,7 @@ pub const Console = struct {
         }
     }
 
+    /// Toggles cursor visibility every 500ms for the blinking effect.
     fn update_cursor(self: *@This()) void {
         const now = sdl.SDL_GetTicks();
         if (now - self.last_blink_ms > 500) {
@@ -259,6 +274,7 @@ pub const Console = struct {
         }
     }
 
+    /// Builds the list of strings to render: history lines plus the current input with cursor.
     fn build_render_lines(
         self: *@This(),
     ) ![]const []const u8 {

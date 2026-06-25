@@ -19,6 +19,7 @@ pub const JJ2Version = enum(u16) {
     SharewareDemo = 0x0200, // Shareware Edition (BaseGame and TSF)
     All = 0xffff,
 
+    /// Determines game version from a tileset file's version field.
     pub fn init_from_tileset(version_id: u16) JJ2Version {
         switch (version_id) {
             0...0x200 => return .BaseGame,
@@ -27,6 +28,7 @@ pub const JJ2Version = enum(u16) {
         }
     }
 
+    /// Determines game version from a level file's version field.
     pub fn init_from_level(version_id: u16) JJ2Version {
         switch (version_id) {
             0...0x202 => return .BaseGame,
@@ -52,11 +54,13 @@ var blue_gem_palette: Palette = undefined;
 var purple_gem_palette: Palette = undefined;
 var cached = false;
 
+/// Packs RGBA components into a single u32 (A-B-G-R order).
 inline fn to_rgba(r: u8, g: u8, b: u8, a: u8) u32 {
     const aa: u32 = a; const rr: u32 = r; const gg: u32 = g; const bb: u32 = b;
     return (aa << 24) | (bb << 16) | (gg << 8) | rr;
 }
 
+/// Generates a gem palette gradient by applying a color factor to indices 128-255.
 fn map_palette(palette: *Palette, factor: u32) void {
     for (128..240) |i| {
         const count = i - 128;
@@ -71,6 +75,7 @@ fn map_palette(palette: *Palette, factor: u32) void {
     }
 }
 
+/// Returns a cached palette for the given gem color (red/green/blue/purple).
 pub fn generate_palette(pal: LevelPalette) *Palette {
     if (!cached) {
         map_palette(&red_gem_palette, 0xff0000);
@@ -98,10 +103,12 @@ pub const Tile = struct {
     collision_bit_mask: COLL_BIT_MASK,
     flipped_collision_bit_mask: COLL_BIT_MASK,
 
+    /// Reads a single bit from a packed byte mask at position indx.
     inline fn get_mask_bit(mask: []u8, indx: usize) bool {
         return (mask[indx/8] >> @intCast(indx % 8) & 0x01) == 0x01;
     }
 
+    /// Creates a tile from 8-bit indexed pixel data and a palette, applying transparency.
     pub fn init_from_indexed(
         allocator: std.mem.Allocator,
         indices: []const u8, 
@@ -127,6 +134,7 @@ pub const Tile = struct {
         return try .init_from_rgba8(rgba, coll_bit_mask, f_coll_bit_mask);
     }
 
+    /// Creates a tile from pre-multiplied RGBA pixel data and collision masks.
     pub fn init_from_rgba8(
         rgba: []const u8,
         coll_bit_mask: []u8,
@@ -140,6 +148,7 @@ pub const Tile = struct {
         return t;
     }
 
+    /// Frees the tile's texture (both 2D and indexed variants).
     pub fn deinit(self: Tile) void {
         switch (self.texture) {
             .texture2d => |t| t.deinit(),
@@ -154,6 +163,7 @@ pub const Tileset = struct {
     palette: Palette,
     alloc: std.mem.Allocator,
 
+    /// Deinitializes all tiles in the tileset and frees the tile array.
     pub fn deinit(self: *Tileset) void {
         for (self.tiles) |t| {
             t.deinit();
@@ -165,7 +175,6 @@ pub const Tileset = struct {
 // Animations and samples
 //
 pub const Frame = struct {
-    // sprite: gfx.IndexedSprite,
     texture: Texture,
     width: i16,
     height: i16,
@@ -197,6 +206,7 @@ pub const Animset = struct {
     blocks: []AnimBlock,
     alloc: std.mem.Allocator,
 
+    /// Frees all animation blocks, frames, samples and their data.
     pub fn deinit(self: *Animset) void {
         for (self.blocks) |b| {
             for (b.anims) |a| {
@@ -265,6 +275,7 @@ pub const Level = struct {
     layers: [8]Layer,
     animated_tiles: []@import("assets_reader.zig").AnimatedTile,
 
+    /// Frees all layer cells and animated tile data associated with the level.
     pub fn deinit(self: *Level) void {
 
         for (&self.layers) |*l| {

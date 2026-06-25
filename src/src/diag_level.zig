@@ -30,6 +30,7 @@ pub const DiagLevel = struct {
     scr_h: i32,
     cam_pos: WorldCoord,
 
+    /// Loads a level, its tileset, and animset; initializes graphics and renderers.
     pub fn init(alloc: std.mem.Allocator, j2l_path: []const u8) !DiagLevel {
         // init system stuff
         const scr_w: i32 = 1400;
@@ -72,6 +73,7 @@ pub const DiagLevel = struct {
         };
     }
 
+    /// IApp deinit callback: frees palettes, tileset, animset, level, renderers, and gfx.
     fn deinit(ctx: *anyopaque) void {
         const self: *DiagLevel = @ptrCast(@alignCast(ctx));
 
@@ -85,6 +87,7 @@ pub const DiagLevel = struct {
         self.renderer.deinit();
         self.gfx_sys.deinit();
     }
+    /// Wraps this diagnostic viewer into the generic IApp interface.
     pub fn app_cast(self: *DiagLevel) app.IApp {
         // register shell commands
         // at this point the address of the DiagLevel
@@ -97,6 +100,7 @@ pub const DiagLevel = struct {
         } };
     }
 
+    /// Main loop: polls events, clears screen, and draws the level.
     fn run(ctx: *anyopaque) void {
         const self: *DiagLevel = @ptrCast(@alignCast(ctx));
 
@@ -125,6 +129,7 @@ pub const DiagLevel = struct {
         }
     }
 
+    /// Renders visible tiles and events for the current camera position.
     fn draw(self: *@This()) void {
         const time_sdl: f32 = @floatFromInt(gfx.sdl.SDL_GetTicks());
         const time_elapsed = time_sdl * 0.001; // in seconds
@@ -201,7 +206,8 @@ pub const DiagLevel = struct {
                             if (asset_maps.event2animsetinxd(ev.id)) |anim| {
                                 const a = &self.animset.blocks[anim.animblock].anims[anim.anim];
                                 const frame = g_anim.calc_curr_frame_for_anim(time_elapsed * 10.0, a);
-                                self.render_tex(a.frames[frame].texture, self.palettes[palette_id], scr.x, scr.y);
+                                const obj = a.frames[frame];
+                                self.render_tex(obj.texture, self.palettes[palette_id], scr.x + obj.hotspotX + 16, scr.y + obj.hotspotY + 16);
                             }
                         }
                     }
@@ -212,6 +218,7 @@ pub const DiagLevel = struct {
         // self.shell.render_shell();
     }
 
+    /// Draws a texture (indexed or direct RGBA) at the given screen position.
     fn render_tex(self: DiagLevel, tex: assets.Texture, palette: ?gfx.gl_utils.Texture1D, x: i32, y: i32) void {
         const position = gfx.math.Vec2.init(@floatFromInt(x), @floatFromInt(y));
         const rotate: f32 = 0;
@@ -222,6 +229,7 @@ pub const DiagLevel = struct {
         }
     }
 
+    /// Moves the camera based on arrow key input.
     fn handle_inputs(self: *DiagLevel) void {
         const speed: u32 = 8;
         const cam_pos_x_min = @divTrunc(self.scr_w, 2);
@@ -242,6 +250,7 @@ pub const DiagLevel = struct {
         }
     }
 
+    /// Clears the screen with a time-varying rainbow color.
     fn clear_screen(self: *DiagLevel) void {
         _ = self;
         // const now_: f32 = gfx.get_ticks();
@@ -255,6 +264,7 @@ pub const DiagLevel = struct {
         gfx.gl.glClearColor(red, green, blue, 1.0);
     }
 
+    /// Returns the visible world rectangle centered on the camera position.
     fn cam_to_world_rect(self: *DiagLevel) struct { top_left: WorldCoord, bottom_right: WorldCoord } {
         const w_2: u32 = @intCast(@divTrunc(self.scr_w, 2));
         const h_2: u32 = @intCast(@divTrunc(self.scr_h, 2));
@@ -266,6 +276,7 @@ pub const DiagLevel = struct {
         };
     }
 
+    /// Converts a world coordinate to a screen coordinate based on camera offset.
     fn world_to_screen(self: DiagLevel, world: WorldCoord) ?ScreenCoord {
         // const w_2 = self.scr_w / 2;
         // const h_2 = self.scr_h / 2;
@@ -289,6 +300,7 @@ pub const DiagLevel = struct {
     }
 };
 
+/// Console command to display debug info (e.g. camera position).
 fn show_cmd(alloc: std.mem.Allocator, ctx: *anyopaque, args: []const u8) ?[]const u8 {
     const self: *DiagLevel = @ptrCast(@alignCast(ctx));
     var it = std.mem.tokenizeScalar(u8, args, ' ');

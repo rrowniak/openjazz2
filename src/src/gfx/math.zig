@@ -3,14 +3,17 @@ const std = @import("std");
 pub const Vec2 = struct {
     v: [2]f32,
 
+    /// Creates a 2D vector from x and y components.
     pub fn init(x_: f32, y_: f32) Vec2 {
         return .{ .v = .{ x_, y_ } };
     }
 
+    /// Returns the x component.
     pub fn x(self: Vec2) f32 {
         return self.v[0];
     }
 
+    /// Returns the y component.
     pub fn y(self: Vec2) f32 {
         return self.v[1];
     }
@@ -19,18 +22,22 @@ pub const Vec2 = struct {
 pub const Vec3 = struct {
     v: [3]f32,
 
+    /// Creates a 3D vector from x, y, and z components.
     pub fn init(x_: f32, y_: f32, z_: f32) Vec3 {
         return .{ .v = .{ x_, y_, z_ } };
     }
 
+    /// Returns the x component.
     pub fn x(self: Vec3) f32 {
         return self.v[0];
     }
 
+    /// Returns the y component.
     pub fn y(self: Vec3) f32 {
         return self.v[1];
     }
 
+    /// Returns the z component.
     pub fn z(self: Vec3) f32 {
         return self.v[2];
     }
@@ -41,10 +48,12 @@ pub const Mat4x4 = struct {
     // column-contiguous memory layuot
     m: [16]f32,
 
+    /// Returns a 4x4 matrix filled with zeros.
     pub fn init_zero() Self {
         return .{ .m = [_]f32{0.0} ** 16 };
     }
 
+    /// Returns a 4x4 identity matrix.
     pub fn init_ident() Self {
         var m = Self.init_zero();
         m.m[0] = 1.0;
@@ -54,6 +63,7 @@ pub const Mat4x4 = struct {
         return m;
     }
 
+    /// Creates an orthographic projection matrix.
     pub fn init_ortho(
         left: f32,
         right: f32,
@@ -94,10 +104,12 @@ pub const Mat4x4 = struct {
         return mat;
     }
 
+    /// Computes the flat array index for column-major layout.
     fn index(row: usize, col: usize) usize {
         return col * 4 + row;
     }
 
+    /// Multiplies two 4x4 matrices.
     pub fn mul(a: Self, b: Self) Self {
         var result: Self = undefined;
 
@@ -115,6 +127,7 @@ pub const Mat4x4 = struct {
         return result;
     }
 
+    /// Returns a translation-composed matrix (self * translation).
     pub fn translate(self: Self, v: Vec3) Self {
         var t = Self.init_ident();
 
@@ -125,6 +138,7 @@ pub const Mat4x4 = struct {
         return Self.mul(self, t);
     }
 
+    /// Returns a scale-composed matrix (self * scale).
     pub fn scale(self: Self, v: Vec3) Self {
         var s = Self.init_ident();
 
@@ -135,6 +149,7 @@ pub const Mat4x4 = struct {
         return Self.mul(self, s);
     }
 
+    /// Returns a rotation-composed matrix (self * rotation around axis).
     pub fn rotate(self: Self, angle: f32, axis: Vec3) Self {
         const x = axis.x();
         const y = axis.y();

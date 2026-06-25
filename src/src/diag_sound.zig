@@ -12,6 +12,7 @@ pub const DiagSound = struct {
     music: J2bSound,
     stream: ?*gfx.sdl.SDL_AudioStream,
 
+    /// Opens an audio stream, loads a .j2b music file via OpenMPT.
     pub fn init(alloc: std.mem.Allocator, j2b_path: []const u8) !DiagSound {
         var spec: gfx.sdl.SDL_AudioSpec = undefined;
         spec.freq = SAMPLE_RATE;
@@ -48,6 +49,7 @@ pub const DiagSound = struct {
             .stream = stream,
         };
     }
+    /// Wraps this diagnostic viewer into the generic IApp interface.
     pub fn app_cast(self: *DiagSound) app.IApp {
         return .{ .ptr = self, .vtable = &.{
             .run = run,
@@ -55,6 +57,7 @@ pub const DiagSound = struct {
         } };
     }
 
+    /// Playback loop: clears screen, feeds audio data to the stream once.
     fn run(ctx: *anyopaque) void {
         const self: *DiagSound = @ptrCast(@alignCast(ctx));
 
@@ -67,6 +70,7 @@ pub const DiagSound = struct {
         }
     }
 
+    /// IApp deinit callback: frees the music module, OpenMPT handle, and audio stream.
     fn deinit(ctx: *anyopaque) void {
         const self: *DiagSound = @ptrCast(@alignCast(ctx));
         self.music.deinit();
@@ -74,6 +78,7 @@ pub const DiagSound = struct {
         gfx.sdl.SDL_DestroyAudioStream(self.stream);
     }
 
+    /// Clears the screen with a time-varying rainbow color.
     fn clear_screen(self: *DiagSound) void {
         _ = self;
         const now_: f32 = gfx.get_ticks();
@@ -115,6 +120,7 @@ const OpenMPT = struct {
         repeat: c_int,
     ) callconv(.c) void,
 
+    /// Dynamically loads libopenmpt and resolves the needed symbols.
     fn init() !OpenMPT {
         const rtld = std.c.RTLD{ .NOW = true };
         const handle = std.c.dlopen("libopenmpt.so", rtld);
@@ -143,6 +149,7 @@ const OpenMPT = struct {
         return openmpt;
     }
 
+    /// Unloads the libopenmpt shared library.
     fn deinit(self: OpenMPT) void {
         _ = std.c.dlclose(self.handle.?);
     }
@@ -182,6 +189,7 @@ const J2bSound = struct {
     openmpt: OpenMPT,
     buffer: [BUFFER_FRAMES * CHANNELS]i16 = undefined,
 
+    /// Creates an OpenMPT module from .j2b file data for playback.
     fn init(data: []const u8, openmpt: OpenMPT) !J2bSound {
         const module =
             openmpt.module_create_from_memory.?(
@@ -200,6 +208,7 @@ const J2bSound = struct {
         return .{ .module = module, .openmpt = openmpt };
     }
 
+    /// Reads the next audio buffer from OpenMPT and pushes it to the SDL audio stream.
     fn progress_play(self: *J2bSound, stream: ?*gfx.sdl.SDL_AudioStream) void {
         const frames = self.openmpt.module_read_interleaved_stereo(self.module, SAMPLE_RATE, BUFFER_FRAMES, &self.buffer);
         if (frames != 0) {
@@ -207,6 +216,7 @@ const J2bSound = struct {
         }
     }
 
+    /// Placeholder deinit (module is managed by OpenMPT handles).
     fn deinit(self: *J2bSound) void {
         _ = self;
     }

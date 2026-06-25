@@ -20,6 +20,7 @@ pub const DiagTileset = struct {
     scr_w: usize,
     scr_h: usize,
 
+    /// Loads a tileset and initializes graphics, shaders, and renderers.
     pub fn init(alloc: std.mem.Allocator, j2t_path: []const u8) !DiagTileset {
         const gfx_sys: gfx.sys = try .init("Jazz2", 1400, 800);
         const vertex_sh = @embedFile("./gfx/glsl/sprite.vert.glsl");
@@ -38,6 +39,7 @@ pub const DiagTileset = struct {
         };
     }
 
+    /// IApp deinit callback: frees tileset, renderers, and graphics system.
     fn deinit(ctx: *anyopaque) void {
         const self: *DiagTileset = @ptrCast(@alignCast(ctx));
 
@@ -47,6 +49,7 @@ pub const DiagTileset = struct {
         self.gfx_sys.deinit();
     }
 
+    /// Wraps this diagnostic viewer into the generic IApp interface.
     pub fn app_cast(self: *DiagTileset) app.IApp {
         return .{
             .ptr = self,
@@ -57,6 +60,7 @@ pub const DiagTileset = struct {
         };
     }
 
+    /// Main loop: polls events, handles camera input, draws all tiles.
     fn run(ctx: *anyopaque) void {
         const self: *DiagTileset = @ptrCast(@alignCast(ctx));
         // main loop
@@ -78,6 +82,7 @@ pub const DiagTileset = struct {
         }
     }
 
+    /// Renders all tiles in a grid layout, with wrapping to new columns.
     fn draw(self: *DiagTileset) void {
         var x: i32 = 0;
         var y: i32 = 0;
@@ -110,6 +115,7 @@ pub const DiagTileset = struct {
         }
     }
 
+    /// Clears the screen with a time-varying rainbow color.
     fn clear_screen(self: *DiagTileset) void {
         _ = self;
         const now_: f32 = @floatFromInt(sdl.SDL_GetTicks());

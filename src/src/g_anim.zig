@@ -2,6 +2,7 @@ const std = @import("std");
 const gfx = @import("gfx").gfx;
 const assets = @import("assets.zig");
 
+/// Returns the current frame index for an animation based on elapsed time and its frame rate.
 pub fn calc_curr_frame_for_anim(elapsed_in_sec: f32, anim: *const assets.Anim) usize {
     // return calc_curr_frame(elapsed_in_sec, anim.frames.len, anim.frame_rate, false);
     const frame_rate = @as(f32, @floatFromInt(anim.frame_rate));
@@ -11,6 +12,7 @@ pub fn calc_curr_frame_for_anim(elapsed_in_sec: f32, anim: *const assets.Anim) u
     return ttimei % anim.frames.len;
 }
 
+/// Computes the current animation frame index, supporting ping-pong loop mode.
 pub fn calc_curr_frame(elapsed_in_sec: f32, frames_len: usize, anim_speed: u16, ping_pong: bool) usize {
     var frame_no: usize = 0;
     const ttimef = @as(f32, @floatFromInt(anim_speed)) * elapsed_in_sec;

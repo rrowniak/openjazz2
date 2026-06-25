@@ -7,6 +7,7 @@ pub const TileCoord = struct {
 
     // bottom left
     // floor truncation
+    /// Converts a world coordinate to a tile index, rounding down (floor) for the top-left.
     pub fn init_from_world_tl(world: WorldCoord) TileCoord {
         const wx = @as(usize, @intCast(world.x));
         const wy = @as(usize, @intCast(world.y)); 
@@ -19,6 +20,7 @@ pub const TileCoord = struct {
     }
     // top right
     // ceil truncation
+    /// Converts a world coordinate to a tile index, rounding up (ceil) for the bottom-right.
     pub fn init_from_world_br(world: WorldCoord) TileCoord {
         const wx = @as(usize, @intCast(world.x));
         const wy = @as(usize, @intCast(world.y)); 

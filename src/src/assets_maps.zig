@@ -507,6 +507,7 @@ pub const EventId = enum(u8) {
 };
 // zig fmt: on
 
+/// Maps a level EventId to the corresponding anim block and animation index.
 pub fn event2animsetinxd(id: EventId) ?assets.AnimsetIndex {
     const ammo: usize = ANIM_SET_AMMO;
     const items: usize = ANIM_SET_ITEMS;

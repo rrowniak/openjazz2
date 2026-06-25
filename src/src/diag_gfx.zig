@@ -10,6 +10,7 @@ pub const DiagGfx = struct {
     gfx_sys: gfx.sys,
     const Uniforms = enum { color };
 
+    /// Initializes the graphics diagnostic: creates window, compiles shaders.
     pub fn init(alloc: std.mem.Allocator) !DiagGfx {
         const gfx_sys: gfx.sys = try .init("Jazz2", 1400, 800);
         const fs = @embedFile("./gfx/glsl/test.frag.glsl");
@@ -20,6 +21,7 @@ pub const DiagGfx = struct {
             .gfx_sys = gfx_sys,
         };
     }
+    /// Wraps this diagnostic viewer into the generic IApp interface.
     pub fn app_cast(self: *DiagGfx) app.IApp {
         return .{ .ptr = self, .vtable = &.{
             .run = run,
@@ -27,6 +29,7 @@ pub const DiagGfx = struct {
         } };
     }
 
+    /// Main loop: polls events and renders a solid magenta clear color.
     fn run(ctx: *anyopaque) void {
         const self: *DiagGfx = @ptrCast(@alignCast(ctx));
 
@@ -45,6 +48,7 @@ pub const DiagGfx = struct {
         }
     }
 
+    /// IApp deinit callback: shuts down the graphics system.
     fn deinit(ctx: *anyopaque) void {
         const self: *DiagGfx = @ptrCast(@alignCast(ctx));
         self.gfx_sys.deinit();

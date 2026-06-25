@@ -18,6 +18,7 @@ const DEFAULT_ANIMSET = "/home/rr/Games/Jazz2/Anims.j2a";
 const DEFAULT_LEVEL = "/home/rr/Games/Jazz2/Castle1.j2l";
 const DEFAULT_SONG = "/home/rr/Games/Jazz2/Castle.j2b";
 
+/// Entry point: parses CLI args and runs the selected diagnostic mode.
 pub fn main() !void {
     std.debug.print("\nStarting {s}\n", .{"OpenJazz2"});
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -82,6 +83,7 @@ pub fn main() !void {
     app.run();
 }
 
+/// Prints usage information and available commands to stdout.
 fn printHelp(prog_name: []const u8) void {
     std.debug.print(
         \\Usage:
