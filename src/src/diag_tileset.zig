@@ -105,11 +105,10 @@ pub const DiagTileset = struct {
             }
             // t.sprite.draw(@intCast(x), @intCast(y));
             const position = Vec2.init(@floatFromInt(x), @floatFromInt(y));
-            const rotate: f32 = 0;
             const color = Vec3.init(brightness, brightness, brightness);
             switch (t.texture) {
-                .texture2dind => |tex| self.renderer_ind.draw(tex, self.palette, position, rotate, color),
-                .texture2d => |tex| self.renderer.draw(tex, position, rotate, color),
+                .texture2dind => |tex| self.renderer_ind.draw(tex, self.palette, position, color),
+                .texture2d => |tex| self.renderer.draw(tex, position, color),
             }
             x += w;
         }

@@ -128,10 +128,9 @@ pub const DiagAnimset = struct {
                 // finally draw a frame
                 const brightness: f32 = 1.0;
                 const position = Vec2.init(@floatFromInt(x), @floatFromInt(y));
-                const rotate: f32 = 0;
                 const color = Vec3.init(brightness, brightness, brightness);
                 switch (anim.frames[f_indx].texture) {
-                    .texture2dind => |t| self.renderer.draw(t, self.default_p, position, rotate, color),
+                    .texture2dind => |t| self.renderer.draw(t, self.default_p, position, color),
                     else => {}
                 }
 

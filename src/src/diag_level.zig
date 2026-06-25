@@ -137,7 +137,7 @@ pub const DiagLevel = struct {
                 }
             }
 
-            self.clear_screen();
+            //self.clear_screen();
             self.draw(events[0..event_count]);
             self.gfx_sys.draw();
         }
@@ -289,7 +289,7 @@ pub const DiagLevel = struct {
             if (self.fps_text_tex) |tex| {
                 const x = @as(f32, @floatFromInt(self.scr_w)) - @as(f32, @floatFromInt(tex.w)) - 10.0;
                 const pos = gfx.math.Vec2.init(x, 10.0);
-                self.renderer.draw(tex, pos, 0.0, gfx.math.Vec3.init(1.0, 1.0, 1.0));
+                self.renderer.draw(tex, pos, gfx.math.Vec3.init(1.0, 1.0, 1.0));
             }
         }
     }
@@ -297,11 +297,10 @@ pub const DiagLevel = struct {
     /// Draws a texture (indexed or direct RGBA) at the given screen position.
     fn render_tex(self: DiagLevel, tex: assets.Texture, palette: ?gfx.gl_utils.Texture1D, x: i32, y: i32) void {
         const position = gfx.math.Vec2.init(@floatFromInt(x), @floatFromInt(y));
-        const rotate: f32 = 0;
         const color = gfx.math.Vec3.init(1.0, 1.0, 1.0);
         switch (tex) {
-            .texture2d => |t| self.renderer.draw(t, position, rotate, color),
-            .texture2dind => |t| self.renderer_ind.draw(t, palette.?, position, rotate, color),
+            .texture2d => |t| self.renderer.draw(t, position, color),
+            .texture2dind => |t| self.renderer_ind.draw(t, palette.?, position, color),
         }
     }
 

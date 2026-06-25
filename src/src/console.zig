@@ -137,12 +137,8 @@ pub const Console = struct {
         const white = gfx.math.Vec3.init(1.0, 1.0, 1.0);
 
         self.renderer.shader.use_prog();
-        var model = gfx.math.Mat4x4.init_ident();
-        model = model.translate(gfx.math.Vec3.init(self.rect.x, self.rect.y, 0.0));
-        model = model.scale(gfx.math.Vec3.init(self.rect.w, self.rect.h, 1.0));
-        self.renderer.shader.setMat4(.model, model.m);
-        self.renderer.shader.setMat4(.view, self.renderer.view.m);
-        self.renderer.shader.setMat4(.projection, self.renderer.projection.m);
+        self.renderer.shader.setVec2(.pos, [2]f32{ self.rect.x, self.rect.y });
+        self.renderer.shader.setVec2(.spriteSize, [2]f32{ self.rect.w, self.rect.h });
         self.renderer.shader.setVec3(.spriteColor, white.v);
 
         gl.glActiveTexture(gl.GL_TEXTURE0);
@@ -184,7 +180,7 @@ pub const Console = struct {
             defer tex.deinit();
 
             const pos = gfx.math.Vec2.init(self.rect.x + 5, y);
-            self.renderer.draw(tex, pos, 0.0, text_color);
+            self.renderer.draw(tex, pos, text_color);
 
             y += self.line_height;
         }

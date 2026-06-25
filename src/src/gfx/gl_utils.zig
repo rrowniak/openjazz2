@@ -268,7 +268,7 @@ pub fn ShaderProgram(comptime Uniforms: type) type {
         }
     };
 }
-pub const SpriteUniforms = enum { image, spriteColor, model, view, projection };
+pub const SpriteUniforms = enum { image, spriteColor, pos, spriteSize, view, projection };
 
 pub const SpriteRenderer = struct {
     const Self = @This();
@@ -325,30 +325,17 @@ pub const SpriteRenderer = struct {
         self.shader.deinit();
     }
 
-    /// Translates the view matrix by the camera movement delta.
+    /// Translates the view matrix by the camera movement delta and uploads it.
     pub fn set_cam_delta(self: *Self, pos: Vec2) void {
         self.view = self.view.translate(Vec3.init(-pos.x(), -pos.y(), 0.0));
+        self.shader.setMat4(.view, self.view.m);
     }
 
-    /// Renders a Texture2D sprite at the given position with rotation and color.
-    pub fn draw(self: Self, texture: Texture2D, position: Vec2, rotate: f32, color: Vec3) void {
-        // prepare transformations
+    /// Renders a Texture2D sprite at the given position with color tint.
+    pub fn draw(self: Self, texture: Texture2D, position: Vec2, color: Vec3) void {
         self.shader.use_prog();
-
-        var model = Mat4x4.init_ident();
-        const size_x: f32 = @floatFromInt(texture.w);
-        const size_y: f32 = @floatFromInt(texture.h);
-
-        model = model.translate(Vec3.init(position.x(), position.y(), 0.0));
-
-        model = model.translate(Vec3.init(0.5 * size_x, 0.5 * size_y, 0.0));
-        model = model.rotate(std.math.degreesToRadians(rotate), Vec3.init(0.0, 0.0, 1.0));
-        model = model.translate(Vec3.init(-0.5 * size_x, -0.5 * size_y, 0.0));
-
-        model = model.scale(Vec3.init(size_x, size_y, 1.0));
-
-        self.shader.setMat4(.model, model.m);
-        self.shader.setMat4(.view, self.view.m);
+        self.shader.setVec2(.pos, [2]f32{ position.x(), position.y() });
+        self.shader.setVec2(.spriteSize, [2]f32{ @floatFromInt(texture.w), @floatFromInt(texture.h) });
         self.shader.setVec3(.spriteColor, color.v);
 
         gl.glActiveTexture(gl.GL_TEXTURE0);
@@ -360,7 +347,7 @@ pub const SpriteRenderer = struct {
     }
 };
 
-pub const IndexedSpriteUniforms = enum { image, palette, spriteColor, model, view, projection };
+pub const IndexedSpriteUniforms = enum { image, palette, spriteColor, pos, spriteSize, view, projection };
 
 pub const IndexedSpriteRenderer = struct {
     const Self = @This();
@@ -418,30 +405,17 @@ pub const IndexedSpriteRenderer = struct {
         self.shader.deinit();
     }
 
-    /// Translates the view matrix by the camera movement delta.
+    /// Translates the view matrix by the camera movement delta and uploads it.
     pub fn set_cam_delta(self: *Self, pos: Vec2) void {
         self.view = self.view.translate(Vec3.init(-pos.x(), -pos.y(), 0.0));
+        self.shader.setMat4(.view, self.view.m);
     }
 
     /// Renders an indexed sprite with palette lookup at the given position.
-    pub fn draw(self: Self, texture: Texture2DInd, palette: Texture1D, position: Vec2, rotate: f32, color: Vec3) void {
-        // prepare transformations
+    pub fn draw(self: Self, texture: Texture2DInd, palette: Texture1D, position: Vec2, color: Vec3) void {
         self.shader.use_prog();
-
-        var model = Mat4x4.init_ident();
-        const size_x: f32 = @floatFromInt(texture.w);
-        const size_y: f32 = @floatFromInt(texture.h);
-
-        model = model.translate(Vec3.init(position.x(), position.y(), 0.0));
-
-        model = model.translate(Vec3.init(0.5 * size_x, 0.5 * size_y, 0.0));
-        model = model.rotate(std.math.degreesToRadians(rotate), Vec3.init(0.0, 0.0, 1.0));
-        model = model.translate(Vec3.init(-0.5 * size_x, -0.5 * size_y, 0.0));
-
-        model = model.scale(Vec3.init(size_x, size_y, 1.0));
-
-        self.shader.setMat4(.model, model.m);
-        self.shader.setMat4(.view, self.view.m);
+        self.shader.setVec2(.pos, [2]f32{ position.x(), position.y() });
+        self.shader.setVec2(.spriteSize, [2]f32{ @floatFromInt(texture.w), @floatFromInt(texture.h) });
         self.shader.setVec3(.spriteColor, color.v);
 
         gl.glActiveTexture(gl.GL_TEXTURE0);
