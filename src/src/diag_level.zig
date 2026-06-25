@@ -29,6 +29,12 @@ pub const DiagLevel = struct {
     scr_w: i32,
     scr_h: i32,
     cam_pos: WorldCoord,
+    // FPS tracking
+    frame_count: u32,
+    last_fps_time: u64,
+    fps: i32,
+    fps_text_tex: ?gfx.gl_utils.Texture2D,
+    last_rendered_fps: i32,
 
     /// Loads a level, its tileset, and animset; initializes graphics and renderers.
     pub fn init(alloc: std.mem.Allocator, j2l_path: []const u8) !DiagLevel {
@@ -74,6 +80,11 @@ pub const DiagLevel = struct {
             .scr_w = scr_w,
             .scr_h = scr_h,
             .cam_pos = .{ .x = 1000, .y = 400 },
+            .frame_count = 0,
+            .last_fps_time = 0,
+            .fps = 0,
+            .fps_text_tex = null,
+            .last_rendered_fps = -1,
         };
     }
 
@@ -82,6 +93,8 @@ pub const DiagLevel = struct {
         const self: *DiagLevel = @ptrCast(@alignCast(ctx));
 
         for (self.palettes) |p| p.deinit();
+
+        if (self.fps_text_tex) |tex| tex.deinit();
 
         self.tileset.deinit();
         self.animset.deinit();
@@ -145,7 +158,6 @@ pub const DiagLevel = struct {
         const base_off_x = @max(0, cx - w_2);
         const base_off_y = @max(0, cy - h_2);
 
-        //for (&self.level.layers, 0..) |*layer, num| {
         var numi: i32 = self.level.layers.len - 1;
         while (numi >= 0) : (numi -= 1) {
             const num: usize = @intCast(numi);
@@ -241,6 +253,68 @@ pub const DiagLevel = struct {
             }
         }
         self.shell.render_shell(events);
+
+        // FPS counter (top-right corner)
+        {
+            const now_ms = gfx.sdl.SDL_GetTicks();
+            const elapsed_ms = now_ms - self.last_fps_time;
+            self.frame_count += 1;
+
+            if (elapsed_ms >= 1000) {
+                self.fps = @as(i32, @intCast(@divTrunc(self.frame_count * 1000, @max(elapsed_ms, 1))));
+                self.frame_count = 0;
+                self.last_fps_time = now_ms;
+            }
+
+            if (self.fps != self.last_rendered_fps) {
+                if (self.fps_text_tex) |tex| {
+                    tex.deinit();
+                    self.fps_text_tex = null;
+                }
+                self.last_rendered_fps = self.fps;
+            }
+
+            if (self.fps > 0 and self.fps_text_tex == null) {
+                const text = std.fmt.allocPrint(self.allocator, "FPS: {d}", .{self.fps}) catch unreachable;
+                defer self.allocator.free(text);
+
+                const font = self.shell.font;
+                const surface = sdl.TTF_RenderText_Blended(
+                    font,
+                    text.ptr,
+                    text.len,
+                    sdl.SDL_Color{ .r = 255, .g = 255, .b = 255, .a = 255 },
+                ) orelse unreachable;
+                defer sdl.SDL_DestroySurface(surface);
+
+                const rgba = sdl.SDL_ConvertSurface(surface, sdl.SDL_PIXELFORMAT_RGBA32) orelse unreachable;
+                defer sdl.SDL_DestroySurface(rgba);
+
+                const tw: usize = @intCast(rgba.*.w);
+                const th: usize = @intCast(rgba.*.h);
+                const pitch: usize = @intCast(rgba.*.pitch);
+                const pixels = self.allocator.alloc(u8, tw * th * 4) catch unreachable;
+                defer self.allocator.free(pixels);
+
+                {
+                    var row: usize = 0;
+                    while (row < th) : (row += 1) {
+                        const src: [*]u8 = @ptrCast(rgba.*.pixels);
+                        const src_row = src[row * pitch .. row * pitch + tw * 4];
+                        const dst_row = pixels[row * tw * 4 .. (row + 1) * tw * 4];
+                        @memcpy(dst_row, src_row);
+                    }
+                }
+
+                self.fps_text_tex = gfx.gl_utils.Texture2D.init_from_rgba(pixels, tw, th) catch unreachable;
+            }
+
+            if (self.fps_text_tex) |tex| {
+                const x = @as(f32, @floatFromInt(self.scr_w)) - @as(f32, @floatFromInt(tex.w)) - 10.0;
+                const pos = gfx.math.Vec2.init(x, 10.0);
+                self.renderer.draw(tex, pos, 0.0, gfx.math.Vec3.init(1.0, 1.0, 1.0));
+            }
+        }
     }
 
     /// Draws a texture (indexed or direct RGBA) at the given screen position.
@@ -256,7 +330,7 @@ pub const DiagLevel = struct {
 
     /// Moves the camera based on arrow key input.
     fn handle_inputs(self: *DiagLevel) void {
-        const speed: u32 = 8;
+        const speed: u32 = 16;
         const cam_pos_x_min = @divTrunc(self.scr_w, 2);
         const cam_pos_y_min = @divTrunc(self.scr_h, 2);
         const keyboard = sdl.SDL_GetKeyboardState(null);
