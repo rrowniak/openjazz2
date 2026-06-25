@@ -1,6 +1,11 @@
 const std = @import("std");
-const gfx = @import("gfx").gfx;
+const gfx = @import("gfx");
 const sdl = gfx.sdl;
+const gl = gfx.gl;
+const gl_utils = gfx.gl_utils;
+
+const FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf";
+const PROMPT = "jazz2> ";
 
 const Command = struct {
     fun: CommandFn,
@@ -9,10 +14,6 @@ const Command = struct {
 
 const CommandFn = *const fn (alloc: std.mem.Allocator, ctx: *anyopaque, args: []const u8) ?[]const u8;
 
-const FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf";
-const PROMPT = "jazz2> ";
-
-/// Built-in help command: returns a help string for the console.
 fn help(alloc: std.mem.Allocator, ctx: *anyopaque, args: []const u8) ?[]const u8 {
     _ = args;
     const self: *Console = @ptrCast(@alignCast(ctx));
@@ -27,7 +28,6 @@ const Lines = struct {
     lines: std.array_list.Managed([]const u8),
     limit: usize = 255,
 
-    /// Creates an empty line buffer with a default limit of 255 lines.
     fn init(alloc: std.mem.Allocator) @This() {
         return .{
             .alloc = alloc,
@@ -35,7 +35,6 @@ const Lines = struct {
         };
     }
 
-    /// Frees all stored lines and the list itself.
     fn deinit(self: *@This()) void {
         for (self.lines.items) |l| {
             self.alloc.free(l);
@@ -43,13 +42,11 @@ const Lines = struct {
         self.lines.deinit();
     }
 
-    /// Appends a line to the history, maintaining the size limit.
     fn append_line(self: *@This(), line: []const u8) !void {
         try self.lines.append(try self.alloc.dupe(u8, line));
         self.maintain_limit();
     }
 
-    /// Removes oldest lines if the total exceeds the configured limit.
     fn maintain_limit(self: *@This()) void {
         if (self.lines.items.len > self.limit) {
             const remove = self.lines.items.len - self.limit;
@@ -65,55 +62,57 @@ pub const Console = struct {
     alloc: std.mem.Allocator,
     commands: std.StringHashMap(Command),
     enabled: bool = false,
-    // graphics
-    rect: sdl.SDL_FRect = .{ .x = 0, .y = 0, .w = 800, .h = 600 },
-    bg_color: sdl.SDL_Color = .{ .r = 0, .g = 0, .b = 0, .a = 200 },
+    rect: struct { x: f32, y: f32, w: f32, h: f32 },
     font: *sdl.TTF_Font,
+    renderer: gl_utils.SpriteRenderer,
+    window: *sdl.SDL_Window,
+    window_h: f32,
     line_height: f32 = 16,
-    // lines
     text: Lines,
     input: std.array_list.Managed(u8),
     cursor_visible: bool = true,
     last_blink_ms: u64 = 0,
 
-    /// Initializes the console: loads font, registers built-in help command.
-    pub fn init(alloc: std.mem.Allocator) !@This() {
+    const vertex_sh = @embedFile("./gfx/glsl/sprite.vert.glsl");
+    const fragment_sh = @embedFile("./gfx/glsl/sprite.frag.glsl");
+
+    pub fn init(alloc: std.mem.Allocator, window: *sdl.SDL_Window, scr_w: f32, scr_h: f32) !@This() {
         var lines = Lines.init(alloc);
         try lines.append_line("Jazz Jackrabbit 2 Console");
         try lines.append_line("------------------------");
         var c = @This(){
             .alloc = alloc,
             .commands = .init(alloc),
+            .rect = .{ .x = 0, .y = 0, .w = scr_w, .h = scr_h / 2 },
             .font = sdl.TTF_OpenFont(FONT_PATH, 14) orelse return error.FontLoadFailed,
+            .renderer = try .init(vertex_sh, fragment_sh, scr_w, scr_h),
+            .window = window,
+            .window_h = scr_h,
             .text = lines,
             .input = .init(alloc),
         };
-        // register help command
         c.register_cmd("help", help, &c);
         return c;
     }
 
-    /// Frees commands map, text history, and input buffer.
     pub fn deinit(self: *@This()) void {
         self.commands.deinit();
         self.text.deinit();
         self.input.deinit();
     }
 
-    /// Opens or closes the in-game console overlay.
     pub fn toggle_onoff(self: *@This()) void {
         self.enabled = !self.enabled;
 
         if (self.enabled) {
-            _ = sdl.SDL_StartTextInput(gfx.get_window());
+            _ = sdl.SDL_StartTextInput(self.window);
             self.cursor_visible = true;
             self.last_blink_ms = sdl.SDL_GetTicks();
         } else {
-            _ = sdl.SDL_StopTextInput(gfx.get_window());
+            _ = sdl.SDL_StopTextInput(self.window);
         }
     }
 
-    /// Registers a new console command by name with its handler function and context.
     pub fn register_cmd(self: *@This(), name: []const u8, cmd: CommandFn, ctx: *anyopaque) void {
         var entry = self.commands.getOrPut(name) catch {
             return;
@@ -121,88 +120,92 @@ pub const Console = struct {
         entry.value_ptr.* = .{ .fun = cmd, .ctx = ctx };
     }
 
-    /// Renders the console background, text, and cursor if enabled. Processes input events.
-    pub fn render_shell(self: *@This()) void {
-        if (self.enabled) {
-            self.update_cursor();
+    pub fn render_shell(self: *@This(), events: []const sdl.SDL_Event) void {
+        if (!self.enabled)
+            return;
 
-            // process inputs
-            for (gfx.get_events()) |ev| {
-                self.handle_event(&ev);
-            }
-            // render shell background
-            _ = sdl.SDL_SetRenderDrawBlendMode(gfx.get_renderer(), sdl.SDL_BLENDMODE_BLEND);
-            _ = sdl.SDL_SetRenderDrawColor(
-                gfx.get_renderer(),
-                self.bg_color.r,
-                self.bg_color.g,
-                self.bg_color.b,
-                self.bg_color.a,
-            );
-            _ = sdl.SDL_RenderFillRect(gfx.get_renderer(), &self.rect);
-            // render shell text
-            const text_color = sdl.SDL_Color{ .r = 255, .g = 255, .b = 255, .a = 255 };
+        self.update_cursor();
 
-            const render_lines = self.build_render_lines() catch {
-                return;
-            };
-            defer {
-                for (render_lines) |l| self.alloc.free(l);
-                self.alloc.free(render_lines);
-            }
-
-            var y: f32 = self.rect.y + 5;
-
-            for (render_lines) |line| {
-                if (line.len == 0) {
-                    y += self.line_height;
-                    continue;
-                }
-
-                const surface = sdl.TTF_RenderText_Blended(
-                    self.font,
-                    line.ptr,
-                    line.len,
-                    text_color,
-                ) orelse continue;
-
-                defer sdl.SDL_DestroySurface(surface);
-
-                const texture = sdl.SDL_CreateTextureFromSurface(gfx.get_renderer(), surface) orelse continue;
-                defer sdl.SDL_DestroyTexture(texture);
-
-                const dst = sdl.SDL_FRect{
-                    .x = self.rect.x + 5,
-                    .y = y,
-                    .w = @floatFromInt(surface.*.w),
-                    .h = @floatFromInt(surface.*.h),
-                };
-
-                _ = sdl.SDL_RenderTexture(gfx.get_renderer(), texture, null, &dst);
-
-                y += self.line_height;
-
-                // stop if outside console
-                if (y > self.rect.y + self.rect.h)
-                    break;
-            }
-
-            // render cursor
-            const now = sdl.SDL_GetTicks();
-            if (now - self.last_blink_ms > 500) {
-                self.cursor_visible = !self.cursor_visible;
-                self.last_blink_ms = now;
-            }
+        for (events) |ev| {
+            self.handle_event(&ev);
         }
-        self.render_runtime();
+
+        gl.glEnable(gl.GL_SCISSOR_TEST);
+        gl.glScissor(
+            @intFromFloat(self.rect.x),
+            @intFromFloat(self.window_h - self.rect.y - self.rect.h),
+            @intFromFloat(self.rect.w),
+            @intFromFloat(self.rect.h),
+        );
+        gl.glClearColor(0.0, 0.0, 0.0, 1.0);
+        gl.glClear(gl.GL_COLOR_BUFFER_BIT);
+        gl.glDisable(gl.GL_SCISSOR_TEST);
+
+        const text_color = gfx.math.Vec3.init(1.0, 1.0, 1.0);
+
+        const render_lines = self.build_render_lines() catch {
+            return;
+        };
+        defer {
+            for (render_lines) |l| self.alloc.free(l);
+            self.alloc.free(render_lines);
+        }
+
+        var y: f32 = self.rect.y + 5;
+
+        for (render_lines) |line| {
+            if (line.len == 0) {
+                y += self.line_height;
+                continue;
+            }
+
+            const surface = sdl.TTF_RenderText_Blended(
+                self.font,
+                line.ptr,
+                line.len,
+                sdl.SDL_Color{ .r = 255, .g = 255, .b = 255, .a = 255 },
+            ) orelse continue;
+            defer sdl.SDL_DestroySurface(surface);
+
+            const rgba_surface = sdl.SDL_ConvertSurface(surface, sdl.SDL_PIXELFORMAT_RGBA32) orelse continue;
+            defer sdl.SDL_DestroySurface(rgba_surface);
+
+            const w: usize = @intCast(rgba_surface.*.w);
+            const h: usize = @intCast(rgba_surface.*.h);
+            const pitch: usize = @intCast(rgba_surface.*.pitch);
+            const src: [*]u8 = @ptrCast(rgba_surface.*.pixels);
+
+            const pixels = self.alloc.alloc(u8, w * h * 4) catch continue;
+            defer self.alloc.free(pixels);
+
+            {
+                var row: usize = 0;
+                while (row < h) : (row += 1) {
+                    const src_row = src[row * pitch .. row * pitch + w * 4];
+                    const dst_row = pixels[row * w * 4 .. (row + 1) * w * 4];
+                    @memcpy(dst_row, src_row);
+                }
+            }
+
+            const tex = gl_utils.Texture2D.init_from_rgba(pixels, w, h) catch continue;
+            defer tex.deinit();
+
+            const pos = gfx.math.Vec2.init(self.rect.x + 5, y);
+            self.renderer.draw(tex, pos, 0.0, text_color);
+
+            y += self.line_height;
+
+            if (y > self.rect.y + self.rect.h)
+                break;
+        }
+
+        const now = sdl.SDL_GetTicks();
+        if (now - self.last_blink_ms > 500) {
+            self.cursor_visible = !self.cursor_visible;
+            self.last_blink_ms = now;
+        }
     }
 
-    /// Placeholder for runtime overlay rendering (currently unused).
-    fn render_runtime(self: @This()) void {
-        _ = self;
-    }
-
-    /// Processes a single SDL event: text input and backspace/enter keys.
     fn handle_event(self: *@This(), event: *const sdl.SDL_Event) void {
         switch (event.type) {
             sdl.SDL_EVENT_TEXT_INPUT => {
@@ -233,7 +236,6 @@ pub const Console = struct {
         }
     }
 
-    /// Stores the current input as a history line and executes it as a command.
     fn submit_line(self: *@This()) void {
         if (self.input.items.len == 0)
             return;
@@ -249,7 +251,6 @@ pub const Console = struct {
         self.input.clearRetainingCapacity();
     }
 
-    /// Parses the input buffer as a command, looks it up, and runs the handler.
     fn execute_command(self: *@This()) void {
         var it = std.mem.tokenizeScalar(u8, self.input.items, ' ');
         if (it.next()) |cmd| {
@@ -265,7 +266,6 @@ pub const Console = struct {
         }
     }
 
-    /// Toggles cursor visibility every 500ms for the blinking effect.
     fn update_cursor(self: *@This()) void {
         const now = sdl.SDL_GetTicks();
         if (now - self.last_blink_ms > 500) {
@@ -274,18 +274,15 @@ pub const Console = struct {
         }
     }
 
-    /// Builds the list of strings to render: history lines plus the current input with cursor.
     fn build_render_lines(
         self: *@This(),
     ) ![]const []const u8 {
         var list = std.array_list.Managed([]const u8).init(self.alloc);
 
-        // history
         for (self.text.lines.items) |line| {
             try list.append(try self.alloc.dupe(u8, line));
         }
 
-        // input line
         var temp = std.array_list.Managed(u8).init(self.alloc);
         defer temp.deinit();
 

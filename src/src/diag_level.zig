@@ -17,7 +17,7 @@ pub const DiagLevel = struct {
     // system stuff
     allocator: std.mem.Allocator,
     gfx_sys: gfx.sys,
-    // shell: console.Console,
+    shell: console.Console,
     renderer: gfx.gl_utils.SpriteRenderer,
     renderer_ind: gfx.gl_utils.IndexedSpriteRenderer,
     // assets
@@ -39,6 +39,10 @@ pub const DiagLevel = struct {
         const vertex_sh = @embedFile("./gfx/glsl/sprite.vert.glsl");
         const fragment_sh = @embedFile("./gfx/glsl/sprite.frag.glsl");
         const fragment_sh_ind = @embedFile("./gfx/glsl/sprite_ind.frag.glsl");
+
+        var shell = try console.Console.init(alloc, gfx_sys.sdl_window.?, @floatFromInt(scr_w), @floatFromInt(scr_h));
+        shell.rect = .{ .x = 0, .y = 0, .w = @floatFromInt(scr_w), .h = @as(f32, @floatFromInt(scr_h)) / 2 };
+
         // load resources
         var level: assets.Level = try asset_reader.load_level(alloc, j2l_path);
 
@@ -54,6 +58,7 @@ pub const DiagLevel = struct {
         return .{
             .allocator = alloc,
             .gfx_sys = gfx_sys,
+            .shell = shell,
             .renderer = try .init(vertex_sh, fragment_sh, scr_w, scr_h),
             .renderer_ind = try .init(vertex_sh, fragment_sh_ind, scr_w, scr_h),
             .level = level,
@@ -69,7 +74,6 @@ pub const DiagLevel = struct {
             .scr_w = scr_w,
             .scr_h = scr_h,
             .cam_pos = .{ .x = 1000, .y = 400 },
-            // .shell = try .init(alloc),
         };
     }
 
@@ -82,17 +86,14 @@ pub const DiagLevel = struct {
         self.tileset.deinit();
         self.animset.deinit();
         self.level.deinit();
-        // self.shell.deinit();
+        self.shell.deinit();
         self.renderer_ind.deinit();
         self.renderer.deinit();
         self.gfx_sys.deinit();
     }
     /// Wraps this diagnostic viewer into the generic IApp interface.
     pub fn app_cast(self: *DiagLevel) app.IApp {
-        // register shell commands
-        // at this point the address of the DiagLevel
-        // should be fixed
-        // self.shell.register_cmd("show", show_cmd, self);
+        self.shell.register_cmd("show", show_cmd, self);
 
         return .{ .ptr = self, .vtable = &.{
             .run = run,
@@ -105,32 +106,32 @@ pub const DiagLevel = struct {
         const self: *DiagLevel = @ptrCast(@alignCast(ctx));
 
         while (true) {
+            var events: [64]sdl.SDL_Event = undefined;
+            var event_count: usize = 0;
             var ev: sdl.SDL_Event = undefined;
             while (sdl.SDL_PollEvent(&ev)) {
-                switch (ev.type) {
-                    sdl.SDL_EVENT_QUIT => {
-                        std.debug.print("Exit{s}", .{"!\n"});
-                        return;
-                    },
-                    sdl.SDL_EVENT_KEY_DOWN => {
-                        const key = ev.key;
-                        if (key.repeat) break;
-                        if (key.scancode == sdl.SDL_SCANCODE_GRAVE) {
-                            // self.shell.toggle_onoff();
-                        }
-                    },
-                    else => {},
+                if (ev.type == sdl.SDL_EVENT_QUIT) {
+                    std.debug.print("Exit{s}", .{"!\n"});
+                    return;
+                }
+                if (ev.type == sdl.SDL_EVENT_KEY_DOWN and !ev.key.repeat and ev.key.scancode == sdl.SDL_SCANCODE_GRAVE) {
+                    self.shell.toggle_onoff();
+                    continue;
+                }
+                if (event_count < events.len) {
+                    events[event_count] = ev;
+                    event_count += 1;
                 }
             }
 
             self.clear_screen();
-            self.draw();
+            self.draw(events[0..event_count]);
             self.gfx_sys.draw();
         }
     }
 
     /// Renders visible tiles and events for the current camera position.
-    fn draw(self: *@This()) void {
+    fn draw(self: *@This(), events: []const sdl.SDL_Event) void {
         const time_sdl: f32 = @floatFromInt(gfx.sdl.SDL_GetTicks());
         const time_elapsed = time_sdl * 0.001; // in seconds
 
@@ -214,8 +215,7 @@ pub const DiagLevel = struct {
                 }
             }
         }
-        // render console
-        // self.shell.render_shell();
+        self.shell.render_shell(events);
     }
 
     /// Draws a texture (indexed or direct RGBA) at the given screen position.

@@ -2,6 +2,7 @@ const std = @import("std");
 
 pub const sdl = @cImport({
     @cInclude("SDL3/SDL.h");
+    @cInclude("SDL3_ttf/SDL_ttf.h");
 });
 
 pub const gl = @cImport({
@@ -23,6 +24,11 @@ pub fn init(window_name: [*c]const u8, width: u16, height: u16) !Self {
     if (!sdl.SDL_Init(sdl.SDL_INIT_VIDEO | sdl.SDL_INIT_AUDIO)) {
         print("SDL_Init failed: {s}\n", .{sdl.SDL_GetError()});
         return error.SDL_Init_Failed;
+    }
+
+    if (!sdl.TTF_Init()) {
+        print("TTF_Init failed: {s}\n", .{sdl.SDL_GetError()});
+        return error.TTF_Init_Failed;
     }
 
     // looking for OpenGL 3.3
@@ -86,6 +92,7 @@ pub fn init(window_name: [*c]const u8, width: u16, height: u16) !Self {
 pub fn deinit(self: Self) void {
     _ = sdl.SDL_GL_DestroyContext(self.gl_context);
     sdl.SDL_DestroyWindow(self.sdl_window);
+    sdl.TTF_Quit();
     sdl.SDL_Quit();
 }
 
