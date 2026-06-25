@@ -65,6 +65,7 @@ pub const Console = struct {
     rect: struct { x: f32, y: f32, w: f32, h: f32 },
     font: *sdl.TTF_Font,
     renderer: gl_utils.SpriteRenderer,
+    bg_tex: gl_utils.Texture2D,
     window: *sdl.SDL_Window,
     window_h: f32,
     line_height: f32 = 16,
@@ -80,12 +81,14 @@ pub const Console = struct {
         var lines = Lines.init(alloc);
         try lines.append_line("Jazz Jackrabbit 2 Console");
         try lines.append_line("------------------------");
+        const bg_pixel = [4]u8{ 0, 0, 0, 200 };
         var c = @This(){
             .alloc = alloc,
             .commands = .init(alloc),
             .rect = .{ .x = 0, .y = 0, .w = scr_w, .h = scr_h / 2 },
             .font = sdl.TTF_OpenFont(FONT_PATH, 14) orelse return error.FontLoadFailed,
             .renderer = try .init(vertex_sh, fragment_sh, scr_w, scr_h),
+            .bg_tex = try .init_from_rgba(bg_pixel[0..], 1, 1),
             .window = window,
             .window_h = scr_h,
             .text = lines,
@@ -96,6 +99,7 @@ pub const Console = struct {
     }
 
     pub fn deinit(self: *@This()) void {
+        self.bg_tex.deinit();
         self.commands.deinit();
         self.text.deinit();
         self.input.deinit();
@@ -130,18 +134,24 @@ pub const Console = struct {
             self.handle_event(&ev);
         }
 
-        gl.glEnable(gl.GL_SCISSOR_TEST);
-        gl.glScissor(
-            @intFromFloat(self.rect.x),
-            @intFromFloat(self.window_h - self.rect.y - self.rect.h),
-            @intFromFloat(self.rect.w),
-            @intFromFloat(self.rect.h),
-        );
-        gl.glClearColor(0.0, 0.0, 0.0, 1.0);
-        gl.glClear(gl.GL_COLOR_BUFFER_BIT);
-        gl.glDisable(gl.GL_SCISSOR_TEST);
+        const white = gfx.math.Vec3.init(1.0, 1.0, 1.0);
 
-        const text_color = gfx.math.Vec3.init(1.0, 1.0, 1.0);
+        self.renderer.shader.use_prog();
+        var model = gfx.math.Mat4x4.init_ident();
+        model = model.translate(gfx.math.Vec3.init(self.rect.x, self.rect.y, 0.0));
+        model = model.scale(gfx.math.Vec3.init(self.rect.w, self.rect.h, 1.0));
+        self.renderer.shader.setMat4(.model, model.m);
+        self.renderer.shader.setMat4(.view, self.renderer.view.m);
+        self.renderer.shader.setMat4(.projection, self.renderer.projection.m);
+        self.renderer.shader.setVec3(.spriteColor, white.v);
+
+        gl.glActiveTexture(gl.GL_TEXTURE0);
+        self.bg_tex.bind();
+        gl.glBindVertexArray(self.renderer.quadVAO);
+        gl.glDrawArrays(gl.GL_TRIANGLES, 0, 6);
+        gl.glBindVertexArray(0);
+
+        const text_color = white;
 
         const render_lines = self.build_render_lines() catch {
             return;
@@ -151,9 +161,15 @@ pub const Console = struct {
             self.alloc.free(render_lines);
         }
 
+        const max_lines = @as(usize, @intFromFloat((self.rect.h - 5) / self.line_height));
+        const start_line = if (render_lines.len > max_lines) render_lines.len - max_lines else 0;
+
         var y: f32 = self.rect.y + 5;
 
-        for (render_lines) |line| {
+        for (render_lines[start_line..]) |line| {
+            if (y + self.line_height > self.rect.y + self.rect.h)
+                break;
+
             if (line.len == 0) {
                 y += self.line_height;
                 continue;
@@ -194,9 +210,6 @@ pub const Console = struct {
             self.renderer.draw(tex, pos, 0.0, text_color);
 
             y += self.line_height;
-
-            if (y > self.rect.y + self.rect.h)
-                break;
         }
 
         const now = sdl.SDL_GetTicks();
