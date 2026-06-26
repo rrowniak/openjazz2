@@ -2,11 +2,15 @@ const std = @import("std");
 const assets = @import("assets.zig");
 const asset_maps = @import("assets_maps.zig");
 const gfx = @import("gfx");
+const gl = gfx.gl;
 const m = @import("g_math.zig");
 const g_anim = @import("g_anim.zig");
+const Shader = gfx.gl_utils.ShaderProgram;
 
 const WorldCoord = m.WorldCoord;
 const TileCoord = m.TileCoord;
+
+const MaskOverlayUniforms = enum { image, pos, spriteSize, view, projection };
 
 /// Renders level layers with parallax, auto-scrolling, animated tiles, and
 /// event sprites.  Owns the renderers and scroll-offset state; callers supply
@@ -15,27 +19,51 @@ pub const LevelView = struct {
     renderer: gfx.gl_utils.SpriteRenderer,
     renderer_ind: gfx.gl_utils.IndexedSpriteRenderer,
     scroll_offsets: [8]gfx.math.Vec2,
+    overlay_shader: Shader(MaskOverlayUniforms),
+    overlay_ind_shader: Shader(MaskOverlayUniforms),
 
     const vertex_sh = @embedFile("./gfx/glsl/sprite.vert.glsl");
     const fragment_sh = @embedFile("./gfx/glsl/sprite.frag.glsl");
     const fragment_sh_ind = @embedFile("./gfx/glsl/sprite_ind.frag.glsl");
+    const mask_overlay_frag = @embedFile("./gfx/glsl/mask_overlay.frag.glsl");
+    const mask_overlay_ind_frag = @embedFile("./gfx/glsl/mask_overlay_ind.frag.glsl");
 
     pub fn init(scr_w: i32, scr_h: i32) !LevelView {
         const zero = gfx.math.Vec2.init(0, 0);
-        return .{
-            .renderer = try .init(vertex_sh, fragment_sh, @floatFromInt(scr_w), @floatFromInt(scr_h)),
-            .renderer_ind = try .init(vertex_sh, fragment_sh_ind, @floatFromInt(scr_w), @floatFromInt(scr_h)),
+        const scr_w_f: f32 = @floatFromInt(scr_w);
+        const scr_h_f: f32 = @floatFromInt(scr_h);
+        var self = LevelView{
+            .renderer = try .init(vertex_sh, fragment_sh, scr_w_f, scr_h_f),
+            .renderer_ind = try .init(vertex_sh, fragment_sh_ind, scr_w_f, scr_h_f),
             .scroll_offsets = [_]gfx.math.Vec2{zero} ** 8,
+            .overlay_shader = try .init(vertex_sh, mask_overlay_frag, null),
+            .overlay_ind_shader = try .init(vertex_sh, mask_overlay_ind_frag, null),
         };
+
+        self.overlay_shader.use_prog();
+        self.overlay_shader.setInt(.image, 0);
+        self.overlay_shader.setMat4(.projection, self.renderer.projection.m);
+        self.overlay_shader.setMat4(.view, self.renderer.view.m);
+
+        self.overlay_ind_shader.use_prog();
+        self.overlay_ind_shader.setInt(.image, 0);
+        self.overlay_ind_shader.setMat4(.projection, self.renderer.projection.m);
+        self.overlay_ind_shader.setMat4(.view, self.renderer.view.m);
+
+        return self;
     }
 
     pub fn deinit(self: *@This()) void {
+        self.overlay_ind_shader.deinit();
+        self.overlay_shader.deinit();
         self.renderer_ind.deinit();
         self.renderer.deinit();
     }
 
     /// Renders all visible layers (background to foreground), including
     /// parallax, auto-scrolling, animated tiles, and event sprites on layer 3.
+    /// If `show_collision_mask` is true, collision mask overlays are drawn
+    /// on tiles and sprites.
     pub fn draw(
         self: *@This(),
         level: *const assets.Level,
@@ -46,6 +74,7 @@ pub const LevelView = struct {
         scr_w: i32,
         scr_h: i32,
         time_elapsed: f32,
+        show_collision_mask: bool,
     ) void {
         const w_2: f32 = @floatFromInt(@divTrunc(scr_w, 2));
         const h_2: f32 = @floatFromInt(@divTrunc(scr_h, 2));
@@ -54,6 +83,16 @@ pub const LevelView = struct {
 
         const base_off_x = @max(0, cx - w_2);
         const base_off_y = @max(0, cy - h_2);
+
+        const blend_was_enabled = if (show_collision_mask)
+            gl.glIsEnabled(gl.GL_BLEND) == gl.GL_TRUE
+        else
+            true;
+
+        if (show_collision_mask) {
+            if (!blend_was_enabled) gl.glEnable(gl.GL_BLEND);
+            gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA);
+        }
 
         var numi: i32 = @as(i32, @intCast(level.layers.len)) - 1;
         while (numi >= 0) : (numi -= 1) {
@@ -102,16 +141,22 @@ pub const LevelView = struct {
                             if (sy + tile_size_i32 < 0 or sy > scr_h) continue;
 
                             const idd = lev_tile.id;
-                            const asset_tile = switch (idd) {
-                                assets.TileId.static_tile => |id| tileset.tiles[id],
+                            const tileset_idx, const asset_tile = switch (idd) {
+                                assets.TileId.static_tile => |id| .{ id, tileset.tiles[id] },
                                 assets.TileId.anim_tile => |id| blk: {
                                     const anim = level.animated_tiles[id];
                                     const frame_no = g_anim.calc_curr_frame(time_elapsed, anim.frame_count, anim.speed, anim.is_ping_pong);
                                     const frame_id = anim.frames[frame_no];
-                                    break :blk tileset.tiles[frame_id];
+                                    break :blk .{ frame_id, tileset.tiles[frame_id] };
                                 },
                             };
                             render_tex(self, asset_tile.texture, palettes[0], sx, sy);
+
+                            if (show_collision_mask) {
+                                if (tileset.mask_overlays) |overlays| {
+                                    self.drawMaskOverlay(overlays[tileset_idx], sx, sy);
+                                }
+                            }
                         }
                     }
                 }
@@ -138,20 +183,61 @@ pub const LevelView = struct {
                                 const frame = g_anim.calc_curr_frame_for_anim(time_elapsed * 10.0, a);
                                 const obj = a.frames[frame];
                                 render_tex(self, obj.texture, palettes[palette_id], sx + obj.hotspotX + 16, sy + obj.hotspotY + 16);
+
+                                if (show_collision_mask) {
+                                    self.renderMaskOverlay(obj.texture, sx + obj.hotspotX + 16, sy + obj.hotspotY + 16);
+                                }
                             }
                         }
                     }
                 }
             }
         }
+
+        if (show_collision_mask and !blend_was_enabled) {
+            gl.glDisable(gl.GL_BLEND);
+        }
     }
 
-    fn render_tex(self: *@This(), tex: assets.Texture, palette: gfx.gl_utils.Texture1D, x: i32, y: i32) void {
-        const position = gfx.math.Vec2.init(@floatFromInt(x), @floatFromInt(y));
-        const color = gfx.math.Vec3.init(1.0, 1.0, 1.0);
+    fn drawMaskOverlay(self: *@This(), texture: gfx.gl_utils.Texture2D, x: i32, y: i32) void {
+        self.overlay_shader.use_prog();
+        self.overlay_shader.setVec2(.pos, [2]f32{ @floatFromInt(x), @floatFromInt(y) });
+        self.overlay_shader.setVec2(.spriteSize, [2]f32{ @floatFromInt(texture.w), @floatFromInt(texture.h) });
+
+        gl.glActiveTexture(gl.GL_TEXTURE0);
+        texture.bind();
+
+        gl.glBindVertexArray(self.renderer.quadVAO);
+        gl.glDrawArrays(gl.GL_TRIANGLES, 0, 6);
+        gl.glBindVertexArray(0);
+    }
+
+    fn drawMaskOverlayInd(self: *@This(), texture: gfx.gl_utils.Texture2DInd, x: i32, y: i32) void {
+        self.overlay_ind_shader.use_prog();
+        self.overlay_ind_shader.setVec2(.pos, [2]f32{ @floatFromInt(x), @floatFromInt(y) });
+        self.overlay_ind_shader.setVec2(.spriteSize, [2]f32{ @floatFromInt(texture.w), @floatFromInt(texture.h) });
+
+        gl.glActiveTexture(gl.GL_TEXTURE0);
+        texture.bind();
+
+        gl.glBindVertexArray(self.renderer.quadVAO);
+        gl.glDrawArrays(gl.GL_TRIANGLES, 0, 6);
+        gl.glBindVertexArray(0);
+    }
+
+    fn renderMaskOverlay(self: *@This(), tex: assets.Texture, x: i32, y: i32) void {
         switch (tex) {
-            .texture2d => |t| self.renderer.draw(t, position, color),
-            .texture2dind => |t| self.renderer_ind.draw(t, palette, position, color),
+            .texture2d => |t| self.drawMaskOverlay(t, x, y),
+            .texture2dind => |t| self.drawMaskOverlayInd(t, x, y),
         }
     }
 };
+
+fn render_tex(self: *LevelView, tex: assets.Texture, palette: gfx.gl_utils.Texture1D, x: i32, y: i32) void {
+    const position = gfx.math.Vec2.init(@floatFromInt(x), @floatFromInt(y));
+    const color = gfx.math.Vec3.init(1.0, 1.0, 1.0);
+    switch (tex) {
+        .texture2d => |t| self.renderer.draw(t, position, color),
+        .texture2dind => |t| self.renderer_ind.draw(t, palette, position, color),
+    }
+}

@@ -33,6 +33,7 @@ pub const Game = struct {
     scr_h: i32,
     cam_pos: WorldCoord,
     fps_counter: gfx.fps.FpsCounter,
+    show_collision_mask: bool = false,
 
     pub fn init(alloc: std.mem.Allocator, j2l_path: []const u8) !Game {
         const scr_w: i32 = 1400;
@@ -82,6 +83,8 @@ pub const Game = struct {
     }
 
     pub fn app_cast(self: *Game) app.IApp {
+        self.shell.register_cmd("show", show_cmd, self);
+        self.shell.register_cmd("hide", hide_cmd, self);
         return .{ .ptr = self, .vtable = &.{
             .run = run,
             .deinit = deinit,
@@ -135,7 +138,7 @@ pub const Game = struct {
         switch (self.state) {
             .playing => {
                 self.handle_inputs();
-                self.level_view.draw(&self.level, &self.tileset, &self.animset, &self.palettes, self.cam_pos, self.scr_w, self.scr_h, time_elapsed);
+                self.level_view.draw(&self.level, &self.tileset, &self.animset, &self.palettes, self.cam_pos, self.scr_w, self.scr_h, time_elapsed, self.show_collision_mask);
             },
             else => {},
         }
@@ -164,3 +167,39 @@ pub const Game = struct {
         }
     }
 };
+
+fn show_cmd(alloc: std.mem.Allocator, ctx: *anyopaque, args: []const u8) ?[]const u8 {
+    const self: *Game = @ptrCast(@alignCast(ctx));
+    var it = std.mem.tokenizeScalar(u8, args, ' ');
+    _ = it.next();
+    const subcmd = it.next() orelse {
+        return alloc.dupe(u8, "Missing command argument") catch { return null; };
+    };
+
+    if (std.mem.eql(u8, subcmd, "mask")) {
+        self.tileset.ensureMaskOverlays() catch {
+            return alloc.dupe(u8, "Failed to create mask overlays") catch { return null; };
+        };
+        self.show_collision_mask = true;
+        return alloc.dupe(u8, "Collision mask overlay enabled") catch { return null; };
+    }
+
+    return std.fmt.allocPrint(alloc, "Unsupported `{s}` argument", .{subcmd}) catch { return null; };
+}
+
+fn hide_cmd(alloc: std.mem.Allocator, ctx: *anyopaque, args: []const u8) ?[]const u8 {
+    const self: *Game = @ptrCast(@alignCast(ctx));
+    var it = std.mem.tokenizeScalar(u8, args, ' ');
+    _ = it.next();
+    const subcmd = it.next() orelse {
+        return alloc.dupe(u8, "Missing command argument") catch { return null; };
+    };
+
+    if (std.mem.eql(u8, subcmd, "mask")) {
+        self.show_collision_mask = false;
+        self.tileset.destroyMaskOverlays();
+        return alloc.dupe(u8, "Collision mask overlay disabled") catch { return null; };
+    }
+
+    return std.fmt.allocPrint(alloc, "Unsupported `{s}` argument", .{subcmd}) catch { return null; };
+}

@@ -162,9 +162,55 @@ pub const Tileset = struct {
     version: u16,
     palette: Palette,
     alloc: std.mem.Allocator,
+    mask_overlays: ?[]gfx.gl_utils.Texture2D = null,
+
+    /// Generates RGBA mask overlay textures from collision bitmasks.
+    pub fn ensureMaskOverlays(self: *Tileset) !void {
+        if (self.mask_overlays != null) return;
+        const texs = try self.alloc.alloc(gfx.gl_utils.Texture2D, self.tiles.len);
+        errdefer self.alloc.free(texs);
+
+        var rgba = try self.alloc.alloc(u8, TILE_SIZE * TILE_SIZE * 4);
+        defer self.alloc.free(rgba);
+
+        for (self.tiles, 0..) |*t, i| {
+            for (0..TILE_SIZE) |y| {
+                for (0..TILE_SIZE) |x| {
+                    const bit_idx = y * TILE_SIZE + x;
+                    const byte_idx = bit_idx / 8;
+                    const bit_off = @as(u3, @intCast(bit_idx % 8));
+                    const set = (t.collision_bit_mask[byte_idx] >> bit_off) & 1 == 1;
+                    const offset = (y * TILE_SIZE + x) * 4;
+                    if (set) {
+                        rgba[offset + 0] = 180;
+                        rgba[offset + 1] = 180;
+                        rgba[offset + 2] = 180;
+                        rgba[offset + 3] = 200;
+                    } else {
+                        rgba[offset + 0] = 0;
+                        rgba[offset + 1] = 0;
+                        rgba[offset + 2] = 0;
+                        rgba[offset + 3] = 0;
+                    }
+                }
+            }
+            texs[i] = try gfx.gl_utils.Texture2D.init_from_rgba(rgba, TILE_SIZE, TILE_SIZE);
+        }
+        self.mask_overlays = texs;
+    }
+
+    /// Frees all mask overlay textures.
+    pub fn destroyMaskOverlays(self: *Tileset) void {
+        if (self.mask_overlays) |overlays| {
+            for (overlays) |*o| o.deinit();
+            self.alloc.free(overlays);
+            self.mask_overlays = null;
+        }
+    }
 
     /// Deinitializes all tiles in the tileset and frees the tile array.
     pub fn deinit(self: *Tileset) void {
+        self.destroyMaskOverlays();
         for (self.tiles) |t| {
             t.deinit();
         }
