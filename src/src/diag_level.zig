@@ -10,7 +10,6 @@ const m = @import("g_math.zig");
 const level_view = @import("level_view.zig");
 const WorldCoord = m.WorldCoord;
 const TileCoord = m.TileCoord;
-const ScreenCoord = m.ScreenCoord;
 
 pub const DiagLevel = struct {
     allocator: std.mem.Allocator,
@@ -152,42 +151,7 @@ pub const DiagLevel = struct {
         }
     }
 
-    fn clear_screen(self: *DiagLevel) void {
-        _ = self;
-        const now: f32 = 0.0;
-        const red: f32 = @floatCast(0.5 + 0.5 * std.math.sin(now));
-        const green: f32 = @floatCast(0.5 + 0.5 * std.math.sin(now + std.math.pi * 2.0 / 3.0));
-        const blue: f32 = @floatCast(0.5 + 0.5 * std.math.sin(now + std.math.pi * 4.0 / 3.0));
 
-        gfx.gl.glClear(gfx.gl.GL_COLOR_BUFFER_BIT | gfx.gl.GL_DEPTH_BUFFER_BIT);
-        gfx.gl.glClearColor(red, green, blue, 1.0);
-    }
-
-    fn cam_to_world_rect(self: *DiagLevel) struct { top_left: WorldCoord, bottom_right: WorldCoord } {
-        const w_2: u32 = @intCast(@divTrunc(self.scr_w, 2));
-        const h_2: u32 = @intCast(@divTrunc(self.scr_h, 2));
-        const x1 = if (self.cam_pos.x <= w_2) 0 else self.cam_pos.x - w_2;
-        const y1 = if (self.cam_pos.y <= h_2) 0 else self.cam_pos.y - h_2;
-        return .{
-            .top_left = .{ .x = x1, .y = y1 },
-            .bottom_right = .{ .x = x1 + @as(u32, @intCast(self.scr_w)), .y = y1 + @as(u32, @intCast(self.scr_h)) },
-        };
-    }
-
-    fn world_to_screen(self: DiagLevel, world: WorldCoord) ?ScreenCoord {
-        const w_2: u32 = @intCast(@divTrunc(self.scr_w, 2));
-        const h_2: u32 = @intCast(@divTrunc(self.scr_h, 2));
-        const cx = self.cam_pos.x;
-        const cy = self.cam_pos.y;
-
-        const offset_x = if (cx < w_2) 0 else cx - w_2;
-        const offset_y = if (cy < h_2) 0 else cy - h_2;
-
-        return ScreenCoord{
-            .x = @as(i32, @intCast(world.x)) - @as(i32, @intCast(offset_x)),
-            .y = @as(i32, @intCast(world.y)) - @as(i32, @intCast(offset_y)),
-        };
-    }
 };
 
 fn show_cmd(alloc: std.mem.Allocator, ctx: *anyopaque, args: []const u8) ?[]const u8 {
