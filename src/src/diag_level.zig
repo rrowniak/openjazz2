@@ -173,7 +173,7 @@ fn show_cmd(alloc: std.mem.Allocator, ctx: *anyopaque, args: []const u8) ?[]cons
     }
 
     if (std.mem.eql(u8, subcmd, "mask")) {
-        self.tileset.ensureMaskOverlays() catch {
+        self.tileset.ensure_mask_overlays() catch {
             return alloc.dupe(u8, "Failed to create mask overlays") catch { return null; };
         };
         self.show_collision_mask = true;
@@ -197,7 +197,7 @@ fn hide_cmd(alloc: std.mem.Allocator, ctx: *anyopaque, args: []const u8) ?[]cons
 
     if (std.mem.eql(u8, subcmd, "mask")) {
         self.show_collision_mask = false;
-        self.tileset.destroyMaskOverlays();
+        self.tileset.destroy_mask_overlays();
         return alloc.dupe(u8, "Collision mask overlay disabled") catch { return null; };
     }
 

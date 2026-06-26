@@ -165,7 +165,7 @@ pub const Tileset = struct {
     mask_overlays: ?[]gfx.gl_utils.Texture2D = null,
 
     /// Generates RGBA mask overlay textures from collision bitmasks.
-    pub fn ensureMaskOverlays(self: *Tileset) !void {
+    pub fn ensure_mask_overlays(self: *Tileset) !void {
         if (self.mask_overlays != null) return;
         const texs = try self.alloc.alloc(gfx.gl_utils.Texture2D, self.tiles.len);
         errdefer self.alloc.free(texs);
@@ -200,7 +200,7 @@ pub const Tileset = struct {
     }
 
     /// Frees all mask overlay textures.
-    pub fn destroyMaskOverlays(self: *Tileset) void {
+    pub fn destroy_mask_overlays(self: *Tileset) void {
         if (self.mask_overlays) |overlays| {
             for (overlays) |*o| o.deinit();
             self.alloc.free(overlays);
@@ -210,7 +210,7 @@ pub const Tileset = struct {
 
     /// Deinitializes all tiles in the tileset and frees the tile array.
     pub fn deinit(self: *Tileset) void {
-        self.destroyMaskOverlays();
+        self.destroy_mask_overlays();
         for (self.tiles) |t| {
             t.deinit();
         }

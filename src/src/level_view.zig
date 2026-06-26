@@ -41,14 +41,14 @@ pub const LevelView = struct {
         };
 
         self.overlay_shader.use_prog();
-        self.overlay_shader.setInt(.image, 0);
-        self.overlay_shader.setMat4(.projection, self.renderer.projection.m);
-        self.overlay_shader.setMat4(.view, self.renderer.view.m);
+        self.overlay_shader.set_int(.image, 0);
+        self.overlay_shader.set_mat4(.projection, self.renderer.projection.m);
+        self.overlay_shader.set_mat4(.view, self.renderer.view.m);
 
         self.overlay_ind_shader.use_prog();
-        self.overlay_ind_shader.setInt(.image, 0);
-        self.overlay_ind_shader.setMat4(.projection, self.renderer.projection.m);
-        self.overlay_ind_shader.setMat4(.view, self.renderer.view.m);
+        self.overlay_ind_shader.set_int(.image, 0);
+        self.overlay_ind_shader.set_mat4(.projection, self.renderer.projection.m);
+        self.overlay_ind_shader.set_mat4(.view, self.renderer.view.m);
 
         return self;
     }
@@ -58,6 +58,113 @@ pub const LevelView = struct {
         self.overlay_shader.deinit();
         self.renderer_ind.deinit();
         self.renderer.deinit();
+    }
+
+    fn draw_layer_tiles(
+        self: *LevelView,
+        level: *const assets.Level,
+        tileset: *const assets.Tileset,
+        palettes: []const gfx.gl_utils.Texture1D,
+        layer: *const assets.Layer,
+        off_x_int: i32,
+        off_y_int: i32,
+        tile_start_x: i32,
+        tile_start_y: i32,
+        tile_end_x: i32,
+        tile_end_y: i32,
+        scr_w: i32,
+        scr_h: i32,
+        time_elapsed: f32,
+        show_collision_mask: bool,
+    ) void {
+        const cells = layer.cells.?;
+        const layer_w: i32 = @intCast(layer.width);
+        const layer_h: i32 = @intCast(layer.height);
+        const tile_size_i32: i32 = @intCast(TileCoord.SIZE);
+        var ty: i32 = tile_start_y;
+        while (ty < tile_end_y) : (ty += 1) {
+            var tx: i32 = tile_start_x;
+            while (tx < tile_end_x) : (tx += 1) {
+                const tile_x = if (layer.flags.repeat_x) @mod(tx, layer_w) else tx;
+                const tile_y = if (layer.flags.repeat_y) @mod(ty, layer_h) else ty;
+
+                if (tile_x < 0 or tile_x >= layer_w or tile_y < 0 or tile_y >= layer_h) continue;
+
+                const maybe_lev_tile = cells[@as(usize, @intCast(tile_y))][@as(usize, @intCast(tile_x))].tile;
+                if (maybe_lev_tile) |lev_tile| {
+                    const sx = tx * tile_size_i32 - off_x_int;
+                    const sy = ty * tile_size_i32 - off_y_int;
+
+                    if (sx + tile_size_i32 < 0 or sx > scr_w) continue;
+                    if (sy + tile_size_i32 < 0 or sy > scr_h) continue;
+
+                    const idd = lev_tile.id;
+                    const tileset_idx, const asset_tile = switch (idd) {
+                        assets.TileId.static_tile => |id| .{ id, tileset.tiles[id] },
+                        assets.TileId.anim_tile => |id| blk: {
+                            const anim = level.animated_tiles[id];
+                            const frame_no = g_anim.calc_curr_frame(time_elapsed, anim.frame_count, anim.speed, anim.is_ping_pong);
+                            const frame_id = anim.frames[frame_no];
+                            break :blk .{ frame_id, tileset.tiles[frame_id] };
+                        },
+                    };
+                    render_tex(self, asset_tile.texture, palettes[0], sx, sy);
+
+                    if (show_collision_mask) {
+                        if (tileset.mask_overlays) |overlays| {
+                            self.draw_mask_overlay(overlays[tileset_idx], sx, sy);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn draw_layer_events(
+        self: *LevelView,
+        animset: *const assets.Animset,
+        palettes: []const gfx.gl_utils.Texture1D,
+        layer: *const assets.Layer,
+        off_x_int: i32,
+        off_y_int: i32,
+        tile_start_x: i32,
+        tile_start_y: i32,
+        tile_end_x: i32,
+        tile_end_y: i32,
+        time_elapsed: f32,
+        show_collision_mask: bool,
+    ) void {
+        const cells = layer.cells.?;
+        const layer_w: i32 = @intCast(layer.width);
+        const layer_h: i32 = @intCast(layer.height);
+        const tile_size_i32: i32 = @intCast(TileCoord.SIZE);
+        var ty: i32 = tile_start_y;
+        while (ty < tile_end_y) : (ty += 1) {
+            if (ty < 0 or ty >= layer_h) continue;
+            var tx: i32 = tile_start_x;
+            while (tx < tile_end_x) : (tx += 1) {
+                if (tx < 0 or tx >= layer_w) continue;
+                if (cells[@as(usize, @intCast(ty))][@as(usize, @intCast(tx))].event) |ev| {
+                    const sx = tx * tile_size_i32 - off_x_int;
+                    const sy = ty * tile_size_i32 - off_y_int;
+
+                    var palette_id: usize = 0;
+                    if (@intFromEnum(ev.id) >= @intFromEnum(asset_maps.EventId.RedGemPlus1) and @intFromEnum(ev.id) <= @intFromEnum(asset_maps.EventId.PurpleGemPlus1)) {
+                        palette_id = @intFromEnum(ev.id) - @intFromEnum(asset_maps.EventId.RedGemPlus1) + 1;
+                    }
+                    if (asset_maps.event2animsetinxd(ev.id)) |anim| {
+                        const a = &animset.blocks[anim.animblock].anims[anim.anim];
+                        const frame = g_anim.calc_curr_frame_for_anim(time_elapsed * 10.0, a);
+                        const obj = a.frames[frame];
+                        render_tex(self, obj.texture, palettes[palette_id], sx + obj.hotspotX + 16, sy + obj.hotspotY + 16);
+
+                        if (show_collision_mask) {
+                            self.render_mask_overlay(obj.texture, sx + obj.hotspotX + 16, sy + obj.hotspotY + 16);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// Renders all visible layers (background to foreground), including
@@ -99,7 +206,6 @@ pub const LevelView = struct {
             const num: usize = @intCast(numi);
             const layer = &level.layers[num];
             if (layer.cells == null) continue;
-            const cells = layer.cells.?;
 
             self.scroll_offsets[num].v[0] += layer.auto_speed_x * time_elapsed;
             self.scroll_offsets[num].v[1] += layer.auto_speed_y * time_elapsed;
@@ -116,81 +222,13 @@ pub const LevelView = struct {
             const tile_end_x: i32 = @intFromFloat(@ceil((layer_off_x + scr_w_f) / tile_size_f));
             const tile_end_y: i32 = @intFromFloat(@ceil((layer_off_y + scr_h_f) / tile_size_f));
 
-            const layer_w: i32 = @intCast(layer.width);
-            const layer_h: i32 = @intCast(layer.height);
             const off_x_int: i32 = @intFromFloat(@floor(layer_off_x));
             const off_y_int: i32 = @intFromFloat(@floor(layer_off_y));
 
-            {
-                const tile_size_i32: i32 = @intCast(TileCoord.SIZE);
-                var ty: i32 = tile_start_y;
-                while (ty < tile_end_y) : (ty += 1) {
-                    var tx: i32 = tile_start_x;
-                    while (tx < tile_end_x) : (tx += 1) {
-                        const tile_x = if (layer.flags.repeat_x) @mod(tx, layer_w) else tx;
-                        const tile_y = if (layer.flags.repeat_y) @mod(ty, layer_h) else ty;
-
-                        if (tile_x < 0 or tile_x >= layer_w or tile_y < 0 or tile_y >= layer_h) continue;
-
-                        const maybe_lev_tile = cells[@as(usize, @intCast(tile_y))][@as(usize, @intCast(tile_x))].tile;
-                        if (maybe_lev_tile) |lev_tile| {
-                            const sx = tx * tile_size_i32 - off_x_int;
-                            const sy = ty * tile_size_i32 - off_y_int;
-
-                            if (sx + tile_size_i32 < 0 or sx > scr_w) continue;
-                            if (sy + tile_size_i32 < 0 or sy > scr_h) continue;
-
-                            const idd = lev_tile.id;
-                            const tileset_idx, const asset_tile = switch (idd) {
-                                assets.TileId.static_tile => |id| .{ id, tileset.tiles[id] },
-                                assets.TileId.anim_tile => |id| blk: {
-                                    const anim = level.animated_tiles[id];
-                                    const frame_no = g_anim.calc_curr_frame(time_elapsed, anim.frame_count, anim.speed, anim.is_ping_pong);
-                                    const frame_id = anim.frames[frame_no];
-                                    break :blk .{ frame_id, tileset.tiles[frame_id] };
-                                },
-                            };
-                            render_tex(self, asset_tile.texture, palettes[0], sx, sy);
-
-                            if (show_collision_mask) {
-                                if (tileset.mask_overlays) |overlays| {
-                                    self.drawMaskOverlay(overlays[tileset_idx], sx, sy);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            self.draw_layer_tiles(level, tileset, palettes, layer, off_x_int, off_y_int, tile_start_x, tile_start_y, tile_end_x, tile_end_y, scr_w, scr_h, time_elapsed, show_collision_mask);
 
             if (num == 3) {
-                const tile_size_i32: i32 = @intCast(TileCoord.SIZE);
-                var ty: i32 = tile_start_y;
-                while (ty < tile_end_y) : (ty += 1) {
-                    if (ty < 0 or ty >= layer_h) continue;
-                    var tx: i32 = tile_start_x;
-                    while (tx < tile_end_x) : (tx += 1) {
-                        if (tx < 0 or tx >= layer_w) continue;
-                        if (cells[@as(usize, @intCast(ty))][@as(usize, @intCast(tx))].event) |ev| {
-                            const sx = tx * tile_size_i32 - off_x_int;
-                            const sy = ty * tile_size_i32 - off_y_int;
-
-                            var palette_id: usize = 0;
-                            if (@intFromEnum(ev.id) >= @intFromEnum(asset_maps.EventId.RedGemPlus1) and @intFromEnum(ev.id) <= @intFromEnum(asset_maps.EventId.PurpleGemPlus1)) {
-                                palette_id = @intFromEnum(ev.id) - @intFromEnum(asset_maps.EventId.RedGemPlus1) + 1;
-                            }
-                            if (asset_maps.event2animsetinxd(ev.id)) |anim| {
-                                const a = &animset.blocks[anim.animblock].anims[anim.anim];
-                                const frame = g_anim.calc_curr_frame_for_anim(time_elapsed * 10.0, a);
-                                const obj = a.frames[frame];
-                                render_tex(self, obj.texture, palettes[palette_id], sx + obj.hotspotX + 16, sy + obj.hotspotY + 16);
-
-                                if (show_collision_mask) {
-                                    self.renderMaskOverlay(obj.texture, sx + obj.hotspotX + 16, sy + obj.hotspotY + 16);
-                                }
-                            }
-                        }
-                    }
-                }
+                self.draw_layer_events(animset, palettes, layer, off_x_int, off_y_int, tile_start_x, tile_start_y, tile_end_x, tile_end_y, time_elapsed, show_collision_mask);
             }
         }
 
@@ -199,10 +237,10 @@ pub const LevelView = struct {
         }
     }
 
-    fn drawMaskOverlay(self: *@This(), texture: gfx.gl_utils.Texture2D, x: i32, y: i32) void {
+    fn draw_mask_overlay(self: *@This(), texture: gfx.gl_utils.Texture2D, x: i32, y: i32) void {
         self.overlay_shader.use_prog();
-        self.overlay_shader.setVec2(.pos, [2]f32{ @floatFromInt(x), @floatFromInt(y) });
-        self.overlay_shader.setVec2(.spriteSize, [2]f32{ @floatFromInt(texture.w), @floatFromInt(texture.h) });
+        self.overlay_shader.set_vec2(.pos, [2]f32{ @floatFromInt(x), @floatFromInt(y) });
+        self.overlay_shader.set_vec2(.spriteSize, [2]f32{ @floatFromInt(texture.w), @floatFromInt(texture.h) });
 
         gl.glActiveTexture(gl.GL_TEXTURE0);
         texture.bind();
@@ -212,10 +250,10 @@ pub const LevelView = struct {
         gl.glBindVertexArray(0);
     }
 
-    fn drawMaskOverlayInd(self: *@This(), texture: gfx.gl_utils.Texture2DInd, x: i32, y: i32) void {
+    fn draw_mask_overlay_ind(self: *@This(), texture: gfx.gl_utils.Texture2DInd, x: i32, y: i32) void {
         self.overlay_ind_shader.use_prog();
-        self.overlay_ind_shader.setVec2(.pos, [2]f32{ @floatFromInt(x), @floatFromInt(y) });
-        self.overlay_ind_shader.setVec2(.spriteSize, [2]f32{ @floatFromInt(texture.w), @floatFromInt(texture.h) });
+        self.overlay_ind_shader.set_vec2(.pos, [2]f32{ @floatFromInt(x), @floatFromInt(y) });
+        self.overlay_ind_shader.set_vec2(.spriteSize, [2]f32{ @floatFromInt(texture.w), @floatFromInt(texture.h) });
 
         gl.glActiveTexture(gl.GL_TEXTURE0);
         texture.bind();
@@ -225,10 +263,10 @@ pub const LevelView = struct {
         gl.glBindVertexArray(0);
     }
 
-    fn renderMaskOverlay(self: *@This(), tex: assets.Texture, x: i32, y: i32) void {
+    fn render_mask_overlay(self: *@This(), tex: assets.Texture, x: i32, y: i32) void {
         switch (tex) {
-            .texture2d => |t| self.drawMaskOverlay(t, x, y),
-            .texture2dind => |t| self.drawMaskOverlayInd(t, x, y),
+            .texture2d => |t| self.draw_mask_overlay(t, x, y),
+            .texture2dind => |t| self.draw_mask_overlay_ind(t, x, y),
         }
     }
 };

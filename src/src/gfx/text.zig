@@ -114,7 +114,7 @@ pub const TextRenderer = struct {
     // RENDER TEXT
     // -------------------------
     /// Renders a string at the given position with scale and color using FreeType glyphs.
-    pub fn renderText(
+    pub fn render_text(
         self: *Self,
         text: []const u8,
         x_start: f32,
@@ -125,7 +125,7 @@ pub const TextRenderer = struct {
         var x = x_start;
 
         self.shader.use();
-        self.shader.setVec3("textColor", color);
+        self.shader.set_vec3("textColor", color);
 
         glActiveTexture(GL_TEXTURE0);
         glBindVertexArray(self.vao);

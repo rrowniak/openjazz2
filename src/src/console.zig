@@ -137,9 +137,9 @@ pub const Console = struct {
         const white = gfx.math.Vec3.init(1.0, 1.0, 1.0);
 
         self.renderer.shader.use_prog();
-        self.renderer.shader.setVec2(.pos, [2]f32{ self.rect.x, self.rect.y });
-        self.renderer.shader.setVec2(.spriteSize, [2]f32{ self.rect.w, self.rect.h });
-        self.renderer.shader.setVec3(.spriteColor, white.v);
+        self.renderer.shader.set_vec2(.pos, [2]f32{ self.rect.x, self.rect.y });
+        self.renderer.shader.set_vec2(.spriteSize, [2]f32{ self.rect.w, self.rect.h });
+        self.renderer.shader.set_vec3(.spriteColor, white.v);
 
         gl.glActiveTexture(gl.GL_TEXTURE0);
         self.bg_tex.bind();

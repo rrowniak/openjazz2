@@ -238,32 +238,32 @@ pub fn ShaderProgram(comptime Uniforms: type) type {
         }
 
         /// Sets a mat4 uniform in the shader.
-        pub fn setMat4(self: Self, comptime uniform: Uniforms, mat: [16]gl.GLfloat) void {
+        pub fn set_mat4(self: Self, comptime uniform: Uniforms, mat: [16]gl.GLfloat) void {
             gl.glUniformMatrix4fv(self.uniforms_map[@intFromEnum(uniform)], 1, 0, &mat);
         }
 
         /// Sets a vec2 uniform in the shader.
-        pub fn setVec2(self: Self, comptime uniform: Uniforms, vec: [2]gl.GLfloat) void {
+        pub fn set_vec2(self: Self, comptime uniform: Uniforms, vec: [2]gl.GLfloat) void {
             gl.glUniform2fv(self.uniforms_map[@intFromEnum(uniform)], 1, &vec);
         }
 
         /// Sets a vec3 uniform in the shader.
-        pub fn setVec3(self: Self, comptime uniform: Uniforms, vec: [3]gl.GLfloat) void {
+        pub fn set_vec3(self: Self, comptime uniform: Uniforms, vec: [3]gl.GLfloat) void {
             gl.glUniform3fv(self.uniforms_map[@intFromEnum(uniform)], 1, &vec);
         }
 
         /// Sets a vec4 uniform in the shader.
-        pub fn setVec4(self: Self, comptime uniform: Uniforms, vec: [4]gl.GLfloat) void {
+        pub fn set_vec4(self: Self, comptime uniform: Uniforms, vec: [4]gl.GLfloat) void {
             gl.glUniform4fv(self.uniforms_map[@intFromEnum(uniform)], 1, &vec);
         }
 
         /// Sets an int uniform in the shader.
-        pub fn setInt(self: Self, comptime uniform: Uniforms, i: gl.GLint) void {
+        pub fn set_int(self: Self, comptime uniform: Uniforms, i: gl.GLint) void {
             gl.glUniform1i(self.uniforms_map[@intFromEnum(uniform)], i);
         }
 
         /// Sets a float uniform in the shader.
-        pub fn setFloat(self: Self, comptime uniform: Uniforms, f: f64) void {
+        pub fn set_float(self: Self, comptime uniform: Uniforms, f: f64) void {
             gl.glUniform1f(self.uniforms_map[@intFromEnum(uniform)], f);
         }
     };
@@ -286,9 +286,9 @@ pub const SpriteRenderer = struct {
         ret.shader = try .init(vertex_sh, fragment_sh, null);
         ret.shader.use_prog();
         // set texture channel to zero aka GL_TEXTURE0
-        ret.shader.setInt(.image, 0);
-        ret.shader.setMat4(.projection, ret.projection.m);
-        ret.shader.setMat4(.view, ret.view.m);
+        ret.shader.set_int(.image, 0);
+        ret.shader.set_mat4(.projection, ret.projection.m);
+        ret.shader.set_mat4(.view, ret.view.m);
 
         // zig fmt: off
         const vertices = [_]f32 { 
@@ -328,15 +328,15 @@ pub const SpriteRenderer = struct {
     /// Translates the view matrix by the camera movement delta and uploads it.
     pub fn set_cam_delta(self: *Self, pos: Vec2) void {
         self.view = self.view.translate(Vec3.init(-pos.x(), -pos.y(), 0.0));
-        self.shader.setMat4(.view, self.view.m);
+        self.shader.set_mat4(.view, self.view.m);
     }
 
     /// Renders a Texture2D sprite at the given position with color tint.
     pub fn draw(self: Self, texture: Texture2D, position: Vec2, color: Vec3) void {
         self.shader.use_prog();
-        self.shader.setVec2(.pos, [2]f32{ position.x(), position.y() });
-        self.shader.setVec2(.spriteSize, [2]f32{ @floatFromInt(texture.w), @floatFromInt(texture.h) });
-        self.shader.setVec3(.spriteColor, color.v);
+        self.shader.set_vec2(.pos, [2]f32{ position.x(), position.y() });
+        self.shader.set_vec2(.spriteSize, [2]f32{ @floatFromInt(texture.w), @floatFromInt(texture.h) });
+        self.shader.set_vec3(.spriteColor, color.v);
 
         gl.glActiveTexture(gl.GL_TEXTURE0);
         texture.bind();
@@ -365,10 +365,10 @@ pub const IndexedSpriteRenderer = struct {
         ret.shader = try .init(vertex_sh, fragment_sh, null);
         ret.shader.use_prog();
         // set texture channel to zero aka GL_TEXTURE0
-        ret.shader.setInt(.image, 0);
-        ret.shader.setInt(.palette, 1);
-        ret.shader.setMat4(.projection, ret.projection.m);
-        ret.shader.setMat4(.view, ret.view.m);
+        ret.shader.set_int(.image, 0);
+        ret.shader.set_int(.palette, 1);
+        ret.shader.set_mat4(.projection, ret.projection.m);
+        ret.shader.set_mat4(.view, ret.view.m);
 
         // zig fmt: off
         const vertices = [_]f32 { 
@@ -408,15 +408,15 @@ pub const IndexedSpriteRenderer = struct {
     /// Translates the view matrix by the camera movement delta and uploads it.
     pub fn set_cam_delta(self: *Self, pos: Vec2) void {
         self.view = self.view.translate(Vec3.init(-pos.x(), -pos.y(), 0.0));
-        self.shader.setMat4(.view, self.view.m);
+        self.shader.set_mat4(.view, self.view.m);
     }
 
     /// Renders an indexed sprite with palette lookup at the given position.
     pub fn draw(self: Self, texture: Texture2DInd, palette: Texture1D, position: Vec2, color: Vec3) void {
         self.shader.use_prog();
-        self.shader.setVec2(.pos, [2]f32{ position.x(), position.y() });
-        self.shader.setVec2(.spriteSize, [2]f32{ @floatFromInt(texture.w), @floatFromInt(texture.h) });
-        self.shader.setVec3(.spriteColor, color.v);
+        self.shader.set_vec2(.pos, [2]f32{ position.x(), position.y() });
+        self.shader.set_vec2(.spriteSize, [2]f32{ @floatFromInt(texture.w), @floatFromInt(texture.h) });
+        self.shader.set_vec3(.spriteColor, color.v);
 
         gl.glActiveTexture(gl.GL_TEXTURE0);
         texture.bind();
