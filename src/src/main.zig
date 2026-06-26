@@ -46,7 +46,7 @@ pub fn main() !void {
     var game_mod: game.Game = undefined;
 
     if (std.mem.eql(u8, command, "game")) {
-        game_mod = try .init(alloc);
+        game_mod = try .init(alloc, DEFAULT_LEVEL);
         app = game_mod.app_cast();
     } else if (std.mem.eql(u8, command, "tileset")) {
         // filename
