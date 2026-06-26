@@ -9,10 +9,11 @@ const diag_animset = @import("diag_animset.zig");
 const diag_level = @import("diag_level.zig");
 const diag_sound = @import("diag_sound.zig");
 const diag_gfx = @import("diag_gfx.zig");
+const game = @import("game.zig");
 
 pub const log_level: std.log.Level = .debug;
 
-const DEFAULT_COMMAND = "tileset";
+const DEFAULT_COMMAND = "game";
 const DEFAULT_TILESET = "/home/rr/Games/Jazz2/Jungle1.j2t";
 const DEFAULT_ANIMSET = "/home/rr/Games/Jazz2/Anims.j2a";
 const DEFAULT_LEVEL = "/home/rr/Games/Jazz2/Castle1.j2l";
@@ -42,8 +43,12 @@ pub fn main() !void {
     var level: diag_level.DiagLevel = undefined;
     var sound: diag_sound.DiagSound = undefined;
     var gfx_sys: diag_gfx.DiagGfx = undefined;
+    var game_mod: game.Game = undefined;
 
-    if (std.mem.eql(u8, command, "tileset")) {
+    if (std.mem.eql(u8, command, "game")) {
+        game_mod = try .init(alloc);
+        app = game_mod.app_cast();
+    } else if (std.mem.eql(u8, command, "tileset")) {
         // filename
         const arg = args.next() orelse DEFAULT_TILESET;
         tilesets = try .init(alloc, arg);
@@ -90,6 +95,7 @@ fn printHelp(prog_name: []const u8) void {
         \\  {s} [command] [options]
         \\
         \\Commands:
+        \\  game                        Run the main game (default)
         \\  tileset TILESET_FILE.j2t    Load and display a tileset file 
         \\  animset ANIMSET_FILE.j2a    Load and display a animset file 
         \\  level LEVAL_FILE.j2l        Load and display a level file 
@@ -97,7 +103,7 @@ fn printHelp(prog_name: []const u8) void {
         \\  gfx                         Test graphics system
         \\  help                        Show this help
         \\
-        \\If no arguments are passed, defaults are used.
+        \\If no arguments are passed, the game is started.
         \\
     , .{prog_name});
 }
