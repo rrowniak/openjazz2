@@ -175,13 +175,15 @@ pub const Game = struct {
                 self.gctx.cam_pos.x = @max(w2, cam_to_x);
                 self.gctx.cam_pos.y = @max(h2, cam_to_y);
 
-                self.level_view.draw(&self.level, &self.gctx, time_elapsed);
+                self.level_view.draw(&self.level, &self.gctx, time_elapsed, self.level.layers.len - 1, 3);
 
                 self.player.draw(
                     &self.level_view.renderer,
                     &self.level_view.renderer_ind,
                     &self.gctx,
                 );
+
+                self.level_view.draw(&self.level, &self.gctx, time_elapsed, 2, 0);
             },
             else => {},
         }

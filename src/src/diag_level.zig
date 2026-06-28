@@ -139,7 +139,7 @@ pub const DiagLevel = struct {
             .scr_w = self.scr_w,
             .scr_h = self.scr_h,
         };
-        self.level_view.draw(&self.level, &self.gctx, time_elapsed);
+        self.level_view.draw(&self.level, &self.gctx, time_elapsed, self.level.layers.len - 1, 0);
 
         self.shell.render_shell(events);
         self.fps_counter.tick(self.allocator, self.shell.font, &self.level_view.renderer, self.scr_w);

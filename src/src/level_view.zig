@@ -191,6 +191,8 @@ pub const LevelView = struct {
         level: *const assets.Level,
         gctx: *const context.GameContext,
         time_elapsed: f32,
+        from: usize,
+        to: usize,
     ) void {
         const w_2: f32 = @floatFromInt(@divTrunc(gctx.draw_ctx.scr_w, 2));
         const h_2: f32 = @floatFromInt(@divTrunc(gctx.draw_ctx.scr_h, 2));
@@ -214,8 +216,8 @@ pub const LevelView = struct {
         }
 
         // Draw layers back-to-front so background layers render first.
-        var numi: i32 = @as(i32, @intCast(level.layers.len)) - 1;
-        while (numi >= 0) : (numi -= 1) {
+        var numi: i32 = @intCast(from);
+        while (numi >= @as(i32, @intCast(to))) : (numi -= 1) {
             const num: usize = @intCast(numi);
             const layer = &level.layers[num];
             if (layer.cells == null) continue;
