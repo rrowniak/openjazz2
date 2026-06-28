@@ -7,6 +7,7 @@ const sdl = gfx.sdl;
 const console = @import("console.zig");
 const utils = @import("utils").utils;
 const m = @import("g_math.zig");
+const context = @import("ctx.zig");
 const level_view = @import("level_view.zig");
 const WorldCoord = m.WorldCoord;
 const TileCoord = m.TileCoord;
@@ -22,9 +23,8 @@ pub const DiagLevel = struct {
     palettes: [5]gfx.gl_utils.Texture1D,
     scr_w: i32,
     scr_h: i32,
-    cam_pos: WorldCoord,
     fps_counter: gfx.fps.FpsCounter,
-    show_collision_mask: bool = false,
+    gctx: context.GameContext,
 
     pub fn init(alloc: std.mem.Allocator, j2l_path: []const u8) !DiagLevel {
         const scr_w: i32 = 1400;
@@ -49,6 +49,13 @@ pub const DiagLevel = struct {
         errdefer animset.deinit();
 
         const lv = try level_view.LevelView.init(scr_w, scr_h);
+        const palettes = [_]gfx.gl_utils.Texture1D{
+            try .init_from_palette_rgba(&tileset.palette),
+            try .init_from_palette_rgba(assets.generate_palette(.red_gem)),
+            try .init_from_palette_rgba(assets.generate_palette(.green_gem)),
+            try .init_from_palette_rgba(assets.generate_palette(.blue_gem)),
+            try .init_from_palette_rgba(assets.generate_palette(.purple_gem)),
+        };
 
         return .{
             .allocator = alloc,
@@ -58,17 +65,15 @@ pub const DiagLevel = struct {
             .level = level,
             .tileset = tileset,
             .animset = animset,
-            .palettes = [_]gfx.gl_utils.Texture1D{
-                try .init_from_palette_rgba(&tileset.palette),
-                try .init_from_palette_rgba(assets.generate_palette(.red_gem)),
-                try .init_from_palette_rgba(assets.generate_palette(.green_gem)),
-                try .init_from_palette_rgba(assets.generate_palette(.blue_gem)),
-                try .init_from_palette_rgba(assets.generate_palette(.purple_gem)),
-            },
+            .palettes = palettes,
             .scr_w = scr_w,
             .scr_h = scr_h,
-            .cam_pos = .{ .x = 1000, .y = 400 },
             .fps_counter = .init(),
+            .gctx = .{
+                .draw_ctx = undefined,
+                .cam_pos = .{ .x = 1000, .y = 400 },
+                .show_collision_mask = false,
+            },
         };
     }
 
@@ -127,7 +132,14 @@ pub const DiagLevel = struct {
 
         self.handle_inputs();
 
-        self.level_view.draw(&self.level, &self.tileset, &self.animset, &self.palettes, self.cam_pos, self.scr_w, self.scr_h, time_elapsed, self.show_collision_mask);
+        self.gctx.draw_ctx = .{
+            .tileset = &self.tileset,
+            .animset = &self.animset,
+            .palettes = &self.palettes,
+            .scr_w = self.scr_w,
+            .scr_h = self.scr_h,
+        };
+        self.level_view.draw(&self.level, &self.gctx, time_elapsed);
 
         self.shell.render_shell(events);
         self.fps_counter.tick(self.allocator, self.shell.font, &self.level_view.renderer, self.scr_w);
@@ -139,17 +151,17 @@ pub const DiagLevel = struct {
         const cam_pos_y_min = @divTrunc(self.scr_h, 2);
         const keyboard = sdl.SDL_GetKeyboardState(null);
 
-        if (keyboard[sdl.SDL_SCANCODE_LEFT] and self.cam_pos.x > cam_pos_x_min) {
-            self.cam_pos.x -= speed;
+        if (keyboard[sdl.SDL_SCANCODE_LEFT] and self.gctx.cam_pos.x > cam_pos_x_min) {
+            self.gctx.cam_pos.x -= speed;
         }
         if (keyboard[sdl.SDL_SCANCODE_RIGHT]) {
-            self.cam_pos.x += speed;
+            self.gctx.cam_pos.x += speed;
         }
-        if (keyboard[sdl.SDL_SCANCODE_UP] and self.cam_pos.y > cam_pos_y_min) {
-            self.cam_pos.y -= speed;
+        if (keyboard[sdl.SDL_SCANCODE_UP] and self.gctx.cam_pos.y > cam_pos_y_min) {
+            self.gctx.cam_pos.y -= speed;
         }
         if (keyboard[sdl.SDL_SCANCODE_DOWN]) {
-            self.cam_pos.y += speed;
+            self.gctx.cam_pos.y += speed;
         }
     }
 
@@ -167,7 +179,7 @@ fn show_cmd(alloc: std.mem.Allocator, ctx: *anyopaque, args: []const u8) ?[]cons
     };
 
     if (std.mem.eql(u8, subcmd, "cam_pos")) {
-        return std.fmt.allocPrint(alloc, "x={d} y={d}", .{ self.cam_pos.x, self.cam_pos.y }) catch {
+        return std.fmt.allocPrint(alloc, "x={d} y={d}", .{ self.gctx.cam_pos.x, self.gctx.cam_pos.y }) catch {
             return null;
         };
     }
@@ -176,7 +188,7 @@ fn show_cmd(alloc: std.mem.Allocator, ctx: *anyopaque, args: []const u8) ?[]cons
         self.tileset.ensure_mask_overlays() catch {
             return alloc.dupe(u8, "Failed to create mask overlays") catch { return null; };
         };
-        self.show_collision_mask = true;
+        self.gctx.show_collision_mask = true;
         return alloc.dupe(u8, "Collision mask overlay enabled") catch { return null; };
     }
 
@@ -196,7 +208,7 @@ fn hide_cmd(alloc: std.mem.Allocator, ctx: *anyopaque, args: []const u8) ?[]cons
     };
 
     if (std.mem.eql(u8, subcmd, "mask")) {
-        self.show_collision_mask = false;
+        self.gctx.show_collision_mask = false;
         self.tileset.destroy_mask_overlays();
         return alloc.dupe(u8, "Collision mask overlay disabled") catch { return null; };
     }

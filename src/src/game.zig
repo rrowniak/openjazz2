@@ -8,9 +8,9 @@ const sdl = gfx.sdl;
 const console = @import("console.zig");
 const utils = @import("utils").utils;
 const m = @import("g_math.zig");
+const context = @import("ctx.zig");
 const level_view = @import("level_view.zig");
 const player_module = @import("player.zig");
-const WorldCoord = m.WorldCoord;
 
 pub const State = enum {
     menu,
@@ -33,11 +33,10 @@ pub const Game = struct {
     palettes: [5]gfx.gl_utils.Texture1D,
     scr_w: i32,
     scr_h: i32,
-    cam_pos: WorldCoord,
     fps_counter: gfx.fps.FpsCounter,
     player: player_module.Player,
     prev_tick: u32,
-    show_collision_mask: bool = false,
+    gctx: context.GameContext,
 
     pub fn init(alloc: std.mem.Allocator, j2l_path: []const u8) !Game {
         const scr_w: i32 = 1400;
@@ -63,11 +62,15 @@ pub const Game = struct {
 
         const lv = try level_view.LevelView.init(scr_w, scr_h);
 
-        const start_pos = find_start_position(&level);
-        const cam_pos: WorldCoord = .{
-            .x = @intFromFloat(start_pos.x),
-            .y = @intFromFloat(start_pos.y),
+        const palettes = [_]gfx.gl_utils.Texture1D{
+            try .init_from_palette_rgba(&tileset.palette),
+            try .init_from_palette_rgba(assets.generate_palette(.red_gem)),
+            try .init_from_palette_rgba(assets.generate_palette(.green_gem)),
+            try .init_from_palette_rgba(assets.generate_palette(.blue_gem)),
+            try .init_from_palette_rgba(assets.generate_palette(.purple_gem)),
         };
+
+        const start_pos = find_start_position(&level);
         const player = player_module.Player.init(start_pos.player_type orelse .Jazz, start_pos.x, start_pos.y);
 
         return .{
@@ -79,19 +82,20 @@ pub const Game = struct {
             .level = level,
             .tileset = tileset,
             .animset = animset,
-            .palettes = [_]gfx.gl_utils.Texture1D{
-                try .init_from_palette_rgba(&tileset.palette),
-                try .init_from_palette_rgba(assets.generate_palette(.red_gem)),
-                try .init_from_palette_rgba(assets.generate_palette(.green_gem)),
-                try .init_from_palette_rgba(assets.generate_palette(.blue_gem)),
-                try .init_from_palette_rgba(assets.generate_palette(.purple_gem)),
-            },
+            .palettes = palettes,
             .scr_w = scr_w,
             .scr_h = scr_h,
-            .cam_pos = cam_pos,
             .player = player,
             .prev_tick = @intCast(gfx.sdl.SDL_GetTicks()),
             .fps_counter = .init(),
+            .gctx = .{
+                .draw_ctx = undefined,
+                .cam_pos = .{
+                    .x = @intFromFloat(start_pos.x),
+                    .y = @intFromFloat(start_pos.y),
+                },
+                .show_collision_mask = false,
+            },
         };
     }
 
@@ -157,23 +161,26 @@ pub const Game = struct {
 
                 self.player.update(dt, keyboard, &self.level);
 
+                self.gctx.draw_ctx = .{
+                    .tileset = &self.tileset,
+                    .animset = &self.animset,
+                    .palettes = &self.palettes,
+                    .scr_w = self.scr_w,
+                    .scr_h = self.scr_h,
+                };
                 const cam_to_x: u32 = @intFromFloat(self.player.pos_x);
                 const cam_to_y: u32 = @intFromFloat(self.player.pos_y);
-                const w2: u32 = @intCast(@divTrunc(self.scr_w, 2));
-                const h2: u32 = @intCast(@divTrunc(self.scr_h, 2));
-                self.cam_pos.x = @max(w2, cam_to_x);
-                self.cam_pos.y = @max(h2, cam_to_y);
+                const w2: u32 = @intCast(@divTrunc(self.gctx.draw_ctx.scr_w, 2));
+                const h2: u32 = @intCast(@divTrunc(self.gctx.draw_ctx.scr_h, 2));
+                self.gctx.cam_pos.x = @max(w2, cam_to_x);
+                self.gctx.cam_pos.y = @max(h2, cam_to_y);
 
-                self.level_view.draw(&self.level, &self.tileset, &self.animset, &self.palettes, self.cam_pos, self.scr_w, self.scr_h, time_elapsed, self.show_collision_mask);
+                self.level_view.draw(&self.level, &self.gctx, time_elapsed);
 
                 self.player.draw(
                     &self.level_view.renderer,
                     &self.level_view.renderer_ind,
-                    &self.animset,
-                    &self.palettes,
-                    self.cam_pos,
-                    self.scr_w,
-                    self.scr_h,
+                    &self.gctx,
                 );
             },
             else => {},
@@ -223,7 +230,7 @@ fn show_cmd(alloc: std.mem.Allocator, ctx: *anyopaque, args: []const u8) ?[]cons
         self.tileset.ensure_mask_overlays() catch {
             return alloc.dupe(u8, "Failed to create mask overlays") catch { return null; };
         };
-        self.show_collision_mask = true;
+        self.gctx.show_collision_mask = true;
         return alloc.dupe(u8, "Collision mask overlay enabled") catch { return null; };
     }
 
@@ -239,7 +246,7 @@ fn hide_cmd(alloc: std.mem.Allocator, ctx: *anyopaque, args: []const u8) ?[]cons
     };
 
     if (std.mem.eql(u8, subcmd, "mask")) {
-        self.show_collision_mask = false;
+        self.gctx.show_collision_mask = false;
         self.tileset.destroy_mask_overlays();
         return alloc.dupe(u8, "Collision mask overlay disabled") catch { return null; };
     }

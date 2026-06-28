@@ -3,6 +3,7 @@ const asset_maps = @import("assets_maps.zig");
 const gfx = @import("gfx");
 const g_anim = @import("g_anim.zig");
 const m = @import("g_math.zig");
+const context = @import("ctx.zig");
 
 pub const PlayerType = enum(u8) {
     Jazz,
@@ -151,12 +152,13 @@ pub const Player = struct {
         self: *Player,
         renderer: *gfx.gl_utils.SpriteRenderer,
         renderer_ind: *gfx.gl_utils.IndexedSpriteRenderer,
-        animset: *const assets.Animset,
-        palettes: []const gfx.gl_utils.Texture1D,
-        cam_pos: m.WorldCoord,
-        scr_w: i32,
-        scr_h: i32,
+        gctx: *const context.GameContext,
     ) void {
+        const animset = gctx.draw_ctx.animset;
+        const palettes = gctx.draw_ctx.palettes;
+        const cam_pos = gctx.cam_pos;
+        const scr_w = gctx.draw_ctx.scr_w;
+        const scr_h = gctx.draw_ctx.scr_h;
         const anim = &animset.blocks[self.anim_block].anims[self.anim_id];
         if (anim.frames.len == 0) return;
 

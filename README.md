@@ -1,14 +1,14 @@
 # OpenJazz2
 
-OpenJazz2 is a recreation of the beloved platformer game, Jazz Jack Rabbit 2. The project not only recreates the game engine but also aims to implement basic features of the original game.
+OpenJazz2 is a from-scratch re-implementation of the classic platformer **Jazz Jackrabbit 2**.
+It reads the original game's data files and renders them using modern OpenGL via SDL3.
 
-## Status
+## Implementations
 
-This is an experimental project written in Zig.
-
-## Installation
-
+- **[Zig](src/)** — Active development. Loads and displays levels, tilesets, animations;
+  plays music; basic player physics. See `src/README.md` for build instructions and usage.
+- **[C++](cpp/)** — Older implementation using C++11/14, SDL2, CMake. On hold.
 
 ## License
 
-OpenJazz2 is licensed under GPL-3.0, allowing users to contribute and modify the code to enhance their gaming experience.
+GNU General Public License v3.0. See [LICENSE](LICENSE).

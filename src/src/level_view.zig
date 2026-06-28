@@ -5,9 +5,9 @@ const gfx = @import("gfx");
 const gl = gfx.gl;
 const m = @import("g_math.zig");
 const g_anim = @import("g_anim.zig");
+const context = @import("ctx.zig");
 const Shader = gfx.gl_utils.ShaderProgram;
 
-const WorldCoord = m.WorldCoord;
 const TileCoord = m.TileCoord;
 
 const MaskOverlayUniforms = enum { image, pos, spriteSize, view, projection };
@@ -63,8 +63,7 @@ pub const LevelView = struct {
     fn draw_layer_tiles(
         self: *LevelView,
         level: *const assets.Level,
-        tileset: *const assets.Tileset,
-        palettes: []const gfx.gl_utils.Texture1D,
+        gctx: *const context.GameContext,
         layer: *const assets.Layer,
         off_x_int: i32,
         off_y_int: i32,
@@ -72,11 +71,13 @@ pub const LevelView = struct {
         tile_start_y: i32,
         tile_end_x: i32,
         tile_end_y: i32,
-        scr_w: i32,
-        scr_h: i32,
         time_elapsed: f32,
-        show_collision_mask: bool,
     ) void {
+        const tileset = gctx.draw_ctx.tileset;
+        const palettes = gctx.draw_ctx.palettes;
+        const scr_w = gctx.draw_ctx.scr_w;
+        const scr_h = gctx.draw_ctx.scr_h;
+        const show_collision_mask = gctx.show_collision_mask;
         const cells = layer.cells.?;
         const layer_w: i32 = @intCast(layer.width);
         const layer_h: i32 = @intCast(layer.height);
@@ -122,8 +123,7 @@ pub const LevelView = struct {
 
     fn draw_layer_events(
         self: *LevelView,
-        animset: *const assets.Animset,
-        palettes: []const gfx.gl_utils.Texture1D,
+        gctx: *const context.GameContext,
         layer: *const assets.Layer,
         off_x_int: i32,
         off_y_int: i32,
@@ -132,8 +132,10 @@ pub const LevelView = struct {
         tile_end_x: i32,
         tile_end_y: i32,
         time_elapsed: f32,
-        show_collision_mask: bool,
     ) void {
+        const animset = gctx.draw_ctx.animset;
+        const palettes = gctx.draw_ctx.palettes;
+        const show_collision_mask = gctx.show_collision_mask;
         const cells = layer.cells.?;
         const layer_w: i32 = @intCast(layer.width);
         const layer_h: i32 = @intCast(layer.height);
@@ -169,24 +171,19 @@ pub const LevelView = struct {
 
     /// Renders all visible layers (background to foreground), including
     /// parallax, auto-scrolling, animated tiles, and event sprites on layer 3.
-    /// If `show_collision_mask` is true, collision mask overlays are drawn
+    /// If `gctx.show_collision_mask` is true, collision mask overlays are drawn
     /// on tiles and sprites.
     pub fn draw(
         self: *@This(),
         level: *const assets.Level,
-        tileset: *const assets.Tileset,
-        animset: *const assets.Animset,
-        palettes: []const gfx.gl_utils.Texture1D,
-        cam_pos: WorldCoord,
-        scr_w: i32,
-        scr_h: i32,
+        gctx: *const context.GameContext,
         time_elapsed: f32,
-        show_collision_mask: bool,
     ) void {
-        const w_2: f32 = @floatFromInt(@divTrunc(scr_w, 2));
-        const h_2: f32 = @floatFromInt(@divTrunc(scr_h, 2));
-        const cx: f32 = @floatFromInt(cam_pos.x);
-        const cy: f32 = @floatFromInt(cam_pos.y);
+        const w_2: f32 = @floatFromInt(@divTrunc(gctx.draw_ctx.scr_w, 2));
+        const h_2: f32 = @floatFromInt(@divTrunc(gctx.draw_ctx.scr_h, 2));
+        const cx: f32 = @floatFromInt(gctx.cam_pos.x);
+        const cy: f32 = @floatFromInt(gctx.cam_pos.y);
+        const show_collision_mask = gctx.show_collision_mask;
 
         const base_off_x = @max(0, cx - w_2);
         const base_off_y = @max(0, cy - h_2);
@@ -214,8 +211,8 @@ pub const LevelView = struct {
             const layer_off_y = base_off_y * layer.speed_y + self.scroll_offsets[num].v[1];
 
             const tile_size_f: f32 = @floatFromInt(TileCoord.SIZE);
-            const scr_w_f: f32 = @floatFromInt(scr_w);
-            const scr_h_f: f32 = @floatFromInt(scr_h);
+            const scr_w_f: f32 = @floatFromInt(gctx.draw_ctx.scr_w);
+            const scr_h_f: f32 = @floatFromInt(gctx.draw_ctx.scr_h);
 
             const tile_start_x: i32 = @intFromFloat(@floor(layer_off_x / tile_size_f));
             const tile_start_y: i32 = @intFromFloat(@floor(layer_off_y / tile_size_f));
@@ -225,10 +222,10 @@ pub const LevelView = struct {
             const off_x_int: i32 = @intFromFloat(@floor(layer_off_x));
             const off_y_int: i32 = @intFromFloat(@floor(layer_off_y));
 
-            self.draw_layer_tiles(level, tileset, palettes, layer, off_x_int, off_y_int, tile_start_x, tile_start_y, tile_end_x, tile_end_y, scr_w, scr_h, time_elapsed, show_collision_mask);
+            self.draw_layer_tiles(level, gctx, layer, off_x_int, off_y_int, tile_start_x, tile_start_y, tile_end_x, tile_end_y, time_elapsed);
 
             if (num == 3) {
-                self.draw_layer_events(animset, palettes, layer, off_x_int, off_y_int, tile_start_x, tile_start_y, tile_end_x, tile_end_y, time_elapsed, show_collision_mask);
+                self.draw_layer_events(gctx, layer, off_x_int, off_y_int, tile_start_x, tile_start_y, tile_end_x, tile_end_y, time_elapsed);
             }
         }
 
