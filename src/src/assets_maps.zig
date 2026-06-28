@@ -28,7 +28,7 @@ const ANIM_BIRDY_DEAD: usize = 19;
 
 // Jazz Player Animations
 
-const ANIM_SET_JAZZ: usize = 54;
+pub const ANIM_SET_JAZZ: usize = 54;
 const ANIM_JAZZ_HOVERBOARD: usize = 1;
 const ANIM_JAZZ_HOVERBOARD_TURN_AROUND: usize = 2;
 const ANIM_JAZZ_ENDING_BUTTSTOMP: usize = 3;
@@ -39,7 +39,7 @@ const ANIM_JAZZ_EXITING_CROUCH: usize = 9;
 const ANIM_JAZZ_VINE_MOVING: usize = 11;
 const ANIM_JAZZ_LEVEL_EXIT: usize = 12;
 const ANIM_JAZZ_DESC_1: usize = 13;
-const ANIM_JAZZ_BUTTSTOMP: usize = 14;
+pub const ANIM_JAZZ_BUTTSTOMP: usize = 14;
 const ANIM_JAZZ_LANDING: usize = 15;
 const ANIM_JAZZ_SHOOT: usize = 16;
 const ANIM_JAZZ_SHOOT_UP: usize = 17;
@@ -51,16 +51,16 @@ const ANIM_JAZZ_VINE_SHOOT: usize = 27;
 const ANIM_JAZZ_COPTER: usize = 28;
 const ANIM_JAZZ_COPTER_SHOOT: usize = 30;
 const ANIM_JAZZ_HPOLE: usize = 31;
-const ANIM_JAZZ_HURT: usize = 32;
-const ANIM_JAZZ_IDLE1: usize = 33;
+pub const ANIM_JAZZ_HURT: usize = 32;
+pub const ANIM_JAZZ_IDLE1: usize = 33;
 const ANIM_JAZZ_IDLE2: usize = 34;
 const ANIM_JAZZ_IDLE3: usize = 35;
 const ANIM_JAZZ_IDLE4: usize = 36;
 const ANIM_JAZZ_IDLE5: usize = 37;
 const ANIM_JAZZ_DESC_GUN: usize = 39;
 const ANIM_JAZZ_DESC: usize = 40;
-const ANIM_JAZZ_JUMP: usize = 41;
-const ANIM_JAZZ_ASCENDING: usize = 42;
+pub const ANIM_JAZZ_JUMP: usize = 41;
+pub const ANIM_JAZZ_ASCENDING: usize = 42;
 const ANIM_JAZZ_OFF_BALANCE: usize = 43;
 const ANIM_JAZZ_LOOK_UP: usize = 47;
 const ANIM_JAZZ_DIZZY: usize = 55;
@@ -68,9 +68,9 @@ const ANIM_JAZZ_PUSHING: usize = 56;
 const ANIM_JAZZ_DESC_SIDE: usize = 61;
 const ANIM_JAZZ_JUMP_SIDE: usize = 63;
 const ANIM_JAZZ_BALL: usize = 67;
-const ANIM_JAZZ_WALKING: usize = 68;
+pub const ANIM_JAZZ_WALKING: usize = 68;
 const ANIM_JAZZ_STARTING_TO_RUN: usize = 70;
-const ANIM_JAZZ_RUNNING: usize = 71;
+pub const ANIM_JAZZ_RUNNING: usize = 71;
 const ANIM_JAZZ_SKIDDING: usize = 72;
 const ANIM_JAZZ_STARTING_SKID: usize = 73;
 const ANIM_JAZZ_ENDING_SKID: usize = 74;
@@ -89,7 +89,7 @@ const ANIM_JAZZ_VPOLE: usize = 92;
 
 // Spaz Player Animations
 
-const ANIM_SET_SPAZ: usize = 85;
+pub const ANIM_SET_SPAZ: usize = 85;
 
 // End of Spaz Player Animations
 

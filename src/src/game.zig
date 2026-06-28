@@ -2,12 +2,14 @@ const std = @import("std");
 const app = @import("app.zig");
 const assets = @import("assets.zig");
 const asset_reader = @import("assets_reader.zig");
+const asset_maps = @import("assets_maps.zig");
 const gfx = @import("gfx");
 const sdl = gfx.sdl;
 const console = @import("console.zig");
 const utils = @import("utils").utils;
 const m = @import("g_math.zig");
 const level_view = @import("level_view.zig");
+const player_module = @import("player.zig");
 const WorldCoord = m.WorldCoord;
 
 pub const State = enum {
@@ -33,6 +35,8 @@ pub const Game = struct {
     scr_h: i32,
     cam_pos: WorldCoord,
     fps_counter: gfx.fps.FpsCounter,
+    player: player_module.Player,
+    prev_tick: u32,
     show_collision_mask: bool = false,
 
     pub fn init(alloc: std.mem.Allocator, j2l_path: []const u8) !Game {
@@ -59,6 +63,13 @@ pub const Game = struct {
 
         const lv = try level_view.LevelView.init(scr_w, scr_h);
 
+        const start_pos = find_start_position(&level);
+        const cam_pos: WorldCoord = .{
+            .x = @intFromFloat(start_pos.x),
+            .y = @intFromFloat(start_pos.y),
+        };
+        const player = player_module.Player.init(start_pos.player_type orelse .Jazz, start_pos.x, start_pos.y);
+
         return .{
             .allocator = alloc,
             .state = .playing,
@@ -77,7 +88,9 @@ pub const Game = struct {
             },
             .scr_w = scr_w,
             .scr_h = scr_h,
-            .cam_pos = .{ .x = 1000, .y = 400 },
+            .cam_pos = cam_pos,
+            .player = player,
+            .prev_tick = @intCast(gfx.sdl.SDL_GetTicks()),
             .fps_counter = .init(),
         };
     }
@@ -132,13 +145,36 @@ pub const Game = struct {
     }
 
     fn update(self: *@This(), events: []const sdl.SDL_Event) void {
-        const time_sdl: f32 = @floatFromInt(gfx.sdl.SDL_GetTicks());
-        const time_elapsed = time_sdl * 0.001;
+        const tick: u64 = gfx.sdl.SDL_GetTicks();
+        const tick32: u32 = @intCast(tick);
+        const time_elapsed: f32 = @as(f32, @floatFromInt(tick32)) * 0.001;
+        const dt: f32 = @as(f32, @floatFromInt(tick32 - self.prev_tick)) * 0.001;
+        self.prev_tick = tick32;
 
         switch (self.state) {
             .playing => {
-                self.handle_inputs();
+                const keyboard = sdl.SDL_GetKeyboardState(null);
+
+                self.player.update(dt, keyboard, &self.level);
+
+                const cam_to_x: u32 = @intFromFloat(self.player.pos_x);
+                const cam_to_y: u32 = @intFromFloat(self.player.pos_y);
+                const w2: u32 = @intCast(@divTrunc(self.scr_w, 2));
+                const h2: u32 = @intCast(@divTrunc(self.scr_h, 2));
+                self.cam_pos.x = @max(w2, cam_to_x);
+                self.cam_pos.y = @max(h2, cam_to_y);
+
                 self.level_view.draw(&self.level, &self.tileset, &self.animset, &self.palettes, self.cam_pos, self.scr_w, self.scr_h, time_elapsed, self.show_collision_mask);
+
+                self.player.draw(
+                    &self.level_view.renderer,
+                    &self.level_view.renderer_ind,
+                    &self.animset,
+                    &self.palettes,
+                    self.cam_pos,
+                    self.scr_w,
+                    self.scr_h,
+                );
             },
             else => {},
         }
@@ -146,27 +182,34 @@ pub const Game = struct {
         self.shell.render_shell(events);
         self.fps_counter.tick(self.allocator, self.shell.font, &self.level_view.renderer, self.scr_w);
     }
+};
 
-    fn handle_inputs(self: *Game) void {
-        const speed: u32 = 16;
-        const cam_pos_x_min = @divTrunc(self.scr_w, 2);
-        const cam_pos_y_min = @divTrunc(self.scr_h, 2);
-        const keyboard = sdl.SDL_GetKeyboardState(null);
+const StartPos = struct {
+    x: f32,
+    y: f32,
+    player_type: ?player_module.PlayerType,
+};
 
-        if (keyboard[sdl.SDL_SCANCODE_LEFT] and self.cam_pos.x > cam_pos_x_min) {
-            self.cam_pos.x -= speed;
-        }
-        if (keyboard[sdl.SDL_SCANCODE_RIGHT]) {
-            self.cam_pos.x += speed;
-        }
-        if (keyboard[sdl.SDL_SCANCODE_UP] and self.cam_pos.y > cam_pos_y_min) {
-            self.cam_pos.y -= speed;
-        }
-        if (keyboard[sdl.SDL_SCANCODE_DOWN]) {
-            self.cam_pos.y += speed;
+fn find_start_position(level: *const assets.Level) StartPos {
+    const tile_size: f32 = @floatFromInt(m.TileCoord.SIZE);
+    for (&level.layers) |*layer| {
+        const cells = layer.cells orelse continue;
+        for (cells, 0..) |row, ty| {
+            for (row, 0..) |cell, tx| {
+                if (cell.event) |ev| {
+                    if (player_module.Player.start_tile(ev.id)) |pt| {
+                        return .{
+                            .x = @as(f32, @floatFromInt(tx)) * tile_size + tile_size / 2,
+                            .y = @as(f32, @floatFromInt(ty)) * tile_size + tile_size / 2,
+                            .player_type = pt,
+                        };
+                    }
+                }
+            }
         }
     }
-};
+    return .{ .x = 100, .y = 100, .player_type = .Jazz };
+}
 
 fn show_cmd(alloc: std.mem.Allocator, ctx: *anyopaque, args: []const u8) ?[]const u8 {
     const self: *Game = @ptrCast(@alignCast(ctx));
