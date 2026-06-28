@@ -28,6 +28,8 @@ pub const LevelView = struct {
     const mask_overlay_frag = @embedFile("./gfx/glsl/mask_overlay.frag.glsl");
     const mask_overlay_ind_frag = @embedFile("./gfx/glsl/mask_overlay_ind.frag.glsl");
 
+    /// Initialises both RGBA and indexed-sprite renderers, plus the overlay
+    /// shaders used for collision-mask display.  All share the same projection.
     pub fn init(scr_w: i32, scr_h: i32) !LevelView {
         const zero = gfx.math.Vec2.init(0, 0);
         const scr_w_f: f32 = @floatFromInt(scr_w);
@@ -40,6 +42,7 @@ pub const LevelView = struct {
             .overlay_ind_shader = try .init(vertex_sh, mask_overlay_ind_frag, null),
         };
 
+        // Share the main view/projection matrices with the overlay shaders.
         self.overlay_shader.use_prog();
         self.overlay_shader.set_int(.image, 0);
         self.overlay_shader.set_mat4(.projection, self.renderer.projection.m);
@@ -60,6 +63,9 @@ pub const LevelView = struct {
         self.renderer.deinit();
     }
 
+    /// Draws one layer's tile grid.  Iterates over the visible tile rectangle,
+    /// resolves static vs. animated tiles, and renders each visible tile.
+    /// Optionally draws collision-mask overlays on top.
     fn draw_layer_tiles(
         self: *LevelView,
         level: *const assets.Level,
@@ -86,6 +92,7 @@ pub const LevelView = struct {
         while (ty < tile_end_y) : (ty += 1) {
             var tx: i32 = tile_start_x;
             while (tx < tile_end_x) : (tx += 1) {
+                // Wrap tile coordinates when the layer has repeat_x/repeat_y set.
                 const tile_x = if (layer.flags.repeat_x) @mod(tx, layer_w) else tx;
                 const tile_y = if (layer.flags.repeat_y) @mod(ty, layer_h) else ty;
 
@@ -100,6 +107,8 @@ pub const LevelView = struct {
                     if (sy + tile_size_i32 < 0 or sy > scr_h) continue;
 
                     const idd = lev_tile.id;
+                    // Resolve tile index: static tiles use the index directly,
+                    // animated tiles compute the current frame from the level's animation table.
                     const tileset_idx, const asset_tile = switch (idd) {
                         assets.TileId.static_tile => |id| .{ id, tileset.tiles[id] },
                         assets.TileId.anim_tile => |id| blk: {
@@ -121,6 +130,9 @@ pub const LevelView = struct {
         }
     }
 
+    /// Draws event sprites (gems, springs, enemies, etc.) on layer 3.
+    /// Uses the animset to look up the sprite for each event, selects the
+    /// gem-colour palette variant, and renders at the tile's hotspot offset.
     fn draw_layer_events(
         self: *LevelView,
         gctx: *const context.GameContext,
@@ -150,6 +162,7 @@ pub const LevelView = struct {
                     const sx = tx * tile_size_i32 - off_x_int;
                     const sy = ty * tile_size_i32 - off_y_int;
 
+                    // Gems use palette slots 1-4 (red, green, blue, purple).
                     var palette_id: usize = 0;
                     if (@intFromEnum(ev.id) >= @intFromEnum(asset_maps.EventId.RedGemPlus1) and @intFromEnum(ev.id) <= @intFromEnum(asset_maps.EventId.PurpleGemPlus1)) {
                         palette_id = @intFromEnum(ev.id) - @intFromEnum(asset_maps.EventId.RedGemPlus1) + 1;
@@ -185,9 +198,11 @@ pub const LevelView = struct {
         const cy: f32 = @floatFromInt(gctx.cam_pos.y);
         const show_collision_mask = gctx.show_collision_mask;
 
+        // Camera centre → top-left corner of the visible area.
         const base_off_x = @max(0, cx - w_2);
         const base_off_y = @max(0, cy - h_2);
 
+        // Enable blending when showing collision overlays.
         const blend_was_enabled = if (show_collision_mask)
             gl.glIsEnabled(gl.GL_BLEND) == gl.GL_TRUE
         else
@@ -198,15 +213,18 @@ pub const LevelView = struct {
             gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA);
         }
 
+        // Draw layers back-to-front so background layers render first.
         var numi: i32 = @as(i32, @intCast(level.layers.len)) - 1;
         while (numi >= 0) : (numi -= 1) {
             const num: usize = @intCast(numi);
             const layer = &level.layers[num];
             if (layer.cells == null) continue;
 
+            // Accumulate auto-scroll offsets for this layer.
             self.scroll_offsets[num].v[0] += layer.auto_speed_x * time_elapsed;
             self.scroll_offsets[num].v[1] += layer.auto_speed_y * time_elapsed;
 
+            // Parallax: scale the base offset by the layer's speed factor, then add auto-scroll.
             const layer_off_x = base_off_x * layer.speed_x + self.scroll_offsets[num].v[0];
             const layer_off_y = base_off_y * layer.speed_y + self.scroll_offsets[num].v[1];
 
@@ -214,21 +232,25 @@ pub const LevelView = struct {
             const scr_w_f: f32 = @floatFromInt(gctx.draw_ctx.scr_w);
             const scr_h_f: f32 = @floatFromInt(gctx.draw_ctx.scr_h);
 
+            // Visible tile range (inclusive start, exclusive end).
             const tile_start_x: i32 = @intFromFloat(@floor(layer_off_x / tile_size_f));
             const tile_start_y: i32 = @intFromFloat(@floor(layer_off_y / tile_size_f));
             const tile_end_x: i32 = @intFromFloat(@ceil((layer_off_x + scr_w_f) / tile_size_f));
             const tile_end_y: i32 = @intFromFloat(@ceil((layer_off_y + scr_h_f) / tile_size_f));
 
+            // Pixel-precise sub-tile offset for smooth scrolling.
             const off_x_int: i32 = @intFromFloat(@floor(layer_off_x));
             const off_y_int: i32 = @intFromFloat(@floor(layer_off_y));
 
             self.draw_layer_tiles(level, gctx, layer, off_x_int, off_y_int, tile_start_x, tile_start_y, tile_end_x, tile_end_y, time_elapsed);
 
+            // Event sprites (enemies, items) only live on layer 3.
             if (num == 3) {
                 self.draw_layer_events(gctx, layer, off_x_int, off_y_int, tile_start_x, tile_start_y, tile_end_x, tile_end_y, time_elapsed);
             }
         }
 
+        // Restore blending state if we changed it.
         if (show_collision_mask and !blend_was_enabled) {
             gl.glDisable(gl.GL_BLEND);
         }
@@ -260,6 +282,7 @@ pub const LevelView = struct {
         gl.glBindVertexArray(0);
     }
 
+    /// Dispatches to the correct overlay shader based on texture variant.
     fn render_mask_overlay(self: *@This(), tex: assets.Texture, x: i32, y: i32) void {
         switch (tex) {
             .texture2d => |t| self.draw_mask_overlay(t, x, y),
@@ -268,6 +291,8 @@ pub const LevelView = struct {
     }
 };
 
+/// Helper: draws a single tile/event texture at screen (x, y).
+/// Dispatches to the RGBA or indexed-sprite renderer depending on texture type.
 fn render_tex(self: *LevelView, tex: assets.Texture, palette: gfx.gl_utils.Texture1D, x: i32, y: i32) void {
     const position = gfx.math.Vec2.init(@floatFromInt(x), @floatFromInt(y));
     const color = gfx.math.Vec3.init(1.0, 1.0, 1.0);
