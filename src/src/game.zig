@@ -11,6 +11,7 @@ const m = @import("g_math.zig");
 const context = @import("ctx.zig");
 const level_view = @import("level_view.zig");
 const player_module = @import("player.zig");
+const collision = @import("collision.zig");
 
 pub const State = enum {
     menu,
@@ -35,6 +36,7 @@ pub const Game = struct {
     scr_h: i32,
     fps_counter: gfx.fps.FpsCounter,
     player: player_module.Player,
+    collision_sys: collision.CollisionSystem,
     prev_tick: u32,
     gctx: context.GameContext,
 
@@ -73,7 +75,7 @@ pub const Game = struct {
         const start_pos = find_start_position(&level);
         const player = player_module.Player.init(start_pos.player_type orelse .Jazz, start_pos.x, start_pos.y);
 
-        return .{
+        var game: Game = .{
             .allocator = alloc,
             .state = .playing,
             .gfx_sys = gfx_sys,
@@ -88,6 +90,7 @@ pub const Game = struct {
             .player = player,
             .prev_tick = @intCast(gfx.sdl.SDL_GetTicks()),
             .fps_counter = .init(),
+            .collision_sys = undefined,
             .gctx = .{
                 .draw_ctx = undefined,
                 .cam_pos = .{
@@ -97,6 +100,17 @@ pub const Game = struct {
                 .show_collision_mask = false,
             },
         };
+
+        game.collision_sys = try collision.CollisionSystem.init(
+            alloc,
+            &game.level.layers[3],
+            &game.tileset,
+            game.level.animated_tiles,
+            game.level.layers[3].width,
+            game.level.layers[3].height,
+        );
+
+        return game;
     }
 
     pub fn app_cast(self: *Game) app.IApp {
@@ -117,6 +131,7 @@ pub const Game = struct {
         self.tileset.deinit();
         self.animset.deinit();
         self.level.deinit();
+        self.collision_sys.deinit();
         self.shell.deinit();
         self.gfx_sys.deinit();
     }

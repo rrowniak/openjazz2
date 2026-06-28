@@ -417,6 +417,40 @@ pub const SpatialGrid = struct {
     }
 };
 
+// ── CollisionSystem ──
+
+/// Holds references needed for tile collision queries so callers only pass
+/// the CollisionSystem pointer instead of individual layer/tileset/etc args.
+/// Owns a SpatialGrid for entity-entity broad-phase.
+pub const CollisionSystem = struct {
+    action_layer: *const assets.Layer,
+    tileset: *const assets.Tileset,
+    animated_tiles: []const asset_reader.AnimatedTile,
+    grid: SpatialGrid,
+    time_elapsed: f32,
+
+    pub fn init(
+        alloc: std.mem.Allocator,
+        action_layer: *const assets.Layer,
+        tileset: *const assets.Tileset,
+        animated_tiles: []const asset_reader.AnimatedTile,
+        grid_cols: usize,
+        grid_rows: usize,
+    ) !CollisionSystem {
+        return .{
+            .action_layer = action_layer,
+            .tileset = tileset,
+            .animated_tiles = animated_tiles,
+            .grid = try SpatialGrid.init(alloc, grid_cols, grid_rows),
+            .time_elapsed = 0,
+        };
+    }
+
+    pub fn deinit(self: *@This()) void {
+        self.grid.deinit();
+    }
+};
+
 // ── Tests ──
 
 test "AABB.init" {
