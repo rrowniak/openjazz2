@@ -67,6 +67,7 @@ pub fn build(b: *std.Build) void {
     const test_files = [_][]const u8{
         "src/assets.zig",
         "src/assets_reader.zig",
+        "src/collision.zig",
         "src/console.zig",
         "src/diag_level.zig",
         "src/g_math.zig",
@@ -81,12 +82,19 @@ pub fn build(b: *std.Build) void {
                 .root_source_file = b.path(path),
                 .target = target,
                 .optimize = optimize,
+                .imports = &.{
+                    .{ .name = "gfx", .module = gfx },
+                    .{ .name = "utils", .module = utils },
+                },
             }),
         });
         t.addIncludePath(sdl_out);
         // needed by SDL3 - otherwise segfault
         t.linkLibC();
         t.linkSystemLibrary("sdl3");
+        t.linkSystemLibrary("SDL3_ttf");
+        t.linkSystemLibrary("SDL3_mixer");
+        t.linkSystemLibrary("gl");
         const run_t = b.addRunArtifact(t);
         test_step.dependOn(&run_t.step);
     }

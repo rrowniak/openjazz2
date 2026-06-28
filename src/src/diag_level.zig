@@ -228,7 +228,7 @@ test "Coord transformations" {
 
     for (w2t_tc) |tc| {
         const w = tc.w;
-        const t = TileCoord.init_from_world(w);
+        const t = TileCoord.init_from_world_tl(w);
         try std.testing.expectEqual(tc.exp.x, t.x);
         try std.testing.expectEqual(tc.exp.y, t.y);
     }
