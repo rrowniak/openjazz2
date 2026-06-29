@@ -100,10 +100,6 @@ pub const Player = struct {
     }
 
     fn apply_physics(self: *Player, dt: f32, cs: *const collision.CollisionSystem) void {
-        const anim = &cs.animset.blocks[self.anim_block].anims[self.anim_id];
-        if (anim.frames.len == 0) return;
-        const frame_no = g_anim.calc_curr_frame_for_anim(self.anim_elapsed, anim);
-        const frame = anim.frames[frame_no];
         const gravity: f32 = 1200.0;
 
         // ── Gravity ──
@@ -119,7 +115,7 @@ pub const Player = struct {
         // ── Full-move attempt ──
         const try_x = self.pos_x + dx;
         const try_y = self.pos_y + dy;
-        const full_aabb = collision.frame_aabb(try_x, try_y, frame);
+        const full_aabb = collision.player_aabb(try_x, try_y);
 
         if (cs.is_empty(full_aabb)) {
             self.pos_x = try_x;
@@ -127,7 +123,7 @@ pub const Player = struct {
         } else {
             // ── Blocked — decompose into X then Y ──
             if (dx != 0) {
-                const x_aabb = collision.frame_aabb(try_x, self.pos_y, frame);
+                const x_aabb = collision.player_aabb(try_x, self.pos_y);
                 const x_sign: i2 = if (dx > 0) 1 else -1;
                 if (cs.resolve_x(x_aabb, x_sign)) |push| {
                     self.pos_x = try_x + push;
@@ -138,7 +134,7 @@ pub const Player = struct {
             }
 
             if (dy != 0) {
-                const y_aabb = collision.frame_aabb(self.pos_x, try_y, frame);
+                const y_aabb = collision.player_aabb(self.pos_x, try_y);
                 const y_sign: i2 = if (dy > 0) 1 else -1;
                 if (cs.resolve_y(y_aabb, y_sign)) |push| {
                     self.pos_y = try_y + push;
@@ -153,7 +149,7 @@ pub const Player = struct {
 
         // ── Floor probe + snap ──
         {
-            var probe = collision.frame_aabb(self.pos_x, self.pos_y, frame);
+            var probe = collision.player_aabb(self.pos_x, self.pos_y);
             probe.max_y += 1.0;
             if (!cs.is_empty(probe)) {
                 if (!self.on_ground) {

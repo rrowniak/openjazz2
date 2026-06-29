@@ -59,17 +59,40 @@ pub const AABB = struct {
     }
 };
 
+// ── Player hitbox ──
+
+/// Player hitbox dimensions.
+///
+/// Hardcoded because per‑frame hotspot/coldspot data differs across
+/// animation states (e.g. idle vs fall), causing the collision box to
+/// shift relative to the entity position when the animation changes.
+/// That shift makes floor detection unreliable — the probe misses the
+/// ground after landing because the hitbox bottom moved up.  A fixed
+/// hitbox avoids this entirely.
+///
+/// The hotspot is at the sprite's center‑bottom; the +8 Y offset shifts
+/// the hitbox centre to the character's waist, giving a 22×30 collision box.
+pub const PLAYER_WIDTH: f32 = 22;
+pub const PLAYER_HEIGHT: f32 = 30;
+pub const PLAYER_OFFSET_Y: f32 = 20;
+
+/// Returns the player's world‑space AABB. Uses fixed dimensions so the
+/// hitbox is stable regardless of the current animation frame.
+pub fn player_aabb(pos_x: f32, pos_y: f32) AABB {
+    return AABB.init(
+        pos_x - PLAYER_WIDTH / 2,
+        pos_y + PLAYER_OFFSET_Y - PLAYER_HEIGHT,
+        pos_x + PLAYER_WIDTH / 2,
+        pos_y + PLAYER_OFFSET_Y,
+    );
+}
+
 // ── Frame hitbox ──
 
-/// Returns a world-space AABB for a sprite at `(pos_x, pos_y)` based on the
-/// given animation frame's hotspot, coldspot and dimensions.
-///
-/// Returns a world-space AABB for a sprite at `(pos_x, pos_y)` based on the
-/// given animation frame's hotspot, coldspot and dimensions.  The formula
-/// `pos - hotspot + coldspot` (matching jazz2‑native) gives the coldspot
-/// centre in world space.  A fallback size of `frame.size - 2` is used on
-/// each axis (matching jazz2‑native when no explicit BoundingBox metadata
-/// is present).
+/// Returns a world‑space AABB for a sprite at `(pos_x, pos_y)` based on the
+/// given animation frame's hotspot and coldspot (matching jazz2‑native).
+/// The formula `pos - hotspot + coldspot` gives the coldspot centre in world
+/// space; a fallback size of `frame.size - 2` is used on each axis.
 pub fn frame_aabb(pos_x: f32, pos_y: f32, frame: assets.Frame) AABB {
     const fw: f32 = @floatFromInt(frame.width);
     const fh: f32 = @floatFromInt(frame.height);
