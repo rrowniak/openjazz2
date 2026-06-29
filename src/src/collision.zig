@@ -4,15 +4,6 @@ const assets = @import("assets.zig");
 const g_anim = @import("g_anim.zig");
 const asset_reader = @import("assets_reader.zig");
 
-// ── Constants ──
-
-/// Player hitbox dimensions (matching jazz2-native Reforged values).
-/// The hotspot is at the sprite's center-bottom; the +8 Y offset shifts the
-/// hitbox center to the character's waist, giving a 22×30 collision box.
-pub const PLAYER_WIDTH: f32 = 22;
-pub const PLAYER_HEIGHT: f32 = 30;
-pub const PLAYER_OFFSET_Y: f32 = 8;
-
 // ── AABB ──
 
 /// Axis-aligned bounding box in world pixel space.
@@ -68,19 +59,30 @@ pub const AABB = struct {
     }
 };
 
-// ── Player hitbox ──
+// ── Frame hitbox ──
 
-/// Returns the player's world-space AABB for the given hotspot position.
+/// Returns a world-space AABB for a sprite at `(pos_x, pos_y)` based on the
+/// given animation frame's hotspot, coldspot and dimensions.
 ///
-/// The hotspot is at center-bottom of the sprite. The box is centred
-/// horizontally on the hotspot and shifted up by `PLAYER_OFFSET_Y` so the
-/// collision region matches the character's waist-to-head span.
-pub fn player_aabb(pos_x: f32, pos_y: f32) AABB {
+/// The hitbox is centred on `(pos + coldspot)` and uses a fallback size of
+/// `frame.size - 2` on each axis (matching jazz2‑native when no explicit
+/// BoundingBox metadata is present).
+pub fn frame_aabb(pos_x: f32, pos_y: f32, frame: assets.Frame) AABB {
+    const fw: f32 = @floatFromInt(frame.width);
+    const fh: f32 = @floatFromInt(frame.height);
+    const csx: f32 = @floatFromInt(frame.coldspotX);
+    const csy: f32 = @floatFromInt(frame.coldspotY);
+
+    const hitbox_w = fw - 2;
+    const hitbox_h = fh - 2;
+    const center_x = pos_x + csx;
+    const bottom_y = pos_y + csy;
+
     return AABB.init(
-        pos_x - PLAYER_WIDTH / 2,                  // left edge
-        pos_y + PLAYER_OFFSET_Y - PLAYER_HEIGHT,    // top edge
-        pos_x + PLAYER_WIDTH / 2,                   // right edge
-        pos_y + PLAYER_OFFSET_Y,                    // bottom edge
+        center_x - hitbox_w / 2,    // left edge
+        bottom_y - hitbox_h,        // top edge
+        center_x + hitbox_w / 2,    // right edge
+        bottom_y,                   // bottom edge
     );
 }
 
@@ -407,8 +409,6 @@ pub const SpatialGrid = struct {
 
     /// Moves `id` from `old_aabb` cells to `new_aabb` cells efficiently by
     /// only touching cells that changed.
-    /// Moves `id` from `old_aabb` cells to `new_aabb` cells efficiently by
-    /// only touching cells that changed.
     ///
     /// Cells present in both old and new ranges are left untouched.
     pub fn move(self: *@This(), id: usize, old_aabb: AABB, new_aabb: AABB) void {
@@ -506,6 +506,8 @@ pub const CollisionSystem = struct {
     action_layer: *const assets.Layer,
     /// The current tileset (for tile collision bitmasks).
     tileset: *const assets.Tileset,
+    /// The current animset (for per-frame sprite hitboxes).
+    animset: *const assets.Animset,
     /// Animated tile definitions (for resolving anim_tile IDs).
     animated_tiles: []const asset_reader.AnimatedTile,
     /// Spatial grid for entity-entity broad-phase.
@@ -516,13 +518,14 @@ pub const CollisionSystem = struct {
     /// Creates a CollisionSystem with an empty SpatialGrid sized to the
     /// action layer dimensions.
     ///
-    /// The pointer fields (`action_layer`, `tileset`, `animated_tiles`)
+    /// All pointer fields (`action_layer`, `tileset`, `animset`, `animated_tiles`)
     /// default to whatever is passed in but **must be refreshed each frame**
     /// in the game update loop.
     pub fn init(
         alloc: std.mem.Allocator,
         action_layer: *const assets.Layer,
         tileset: *const assets.Tileset,
+        animset: *const assets.Animset,
         animated_tiles: []const asset_reader.AnimatedTile,
         grid_cols: usize,
         grid_rows: usize,
@@ -530,6 +533,7 @@ pub const CollisionSystem = struct {
         return .{
             .action_layer = action_layer,
             .tileset = tileset,
+            .animset = animset,
             .animated_tiles = animated_tiles,
             .grid = try SpatialGrid.init(alloc, grid_cols, grid_rows),
             .time_elapsed = 0,
@@ -591,17 +595,29 @@ test "AABB.translate" {
     try testing.expectEqual(@as(f32, 57), t.max_y);
 }
 
-test "player_aabb" {
+test "frame_aabb" {
+    const frame = assets.Frame{
+        .texture = undefined,
+        .width = 24,
+        .height = 32,
+        .coldspotX = 0,
+        .coldspotY = 8,
+        .hotspotX = 12,
+        .hotspotY = 32,
+        .gunspotX = 0,
+        .gunspotY = 0,
+    };
     const pos_x: f32 = 100;
     const pos_y: f32 = 200;
-    const hb = player_aabb(pos_x, pos_y);
-    try testing.expectApproxEqAbs(@as(f32, 100 - PLAYER_WIDTH / 2), hb.min_x, 0.001);
-    try testing.expectApproxEqAbs(@as(f32, 100 + PLAYER_WIDTH / 2), hb.max_x, 0.001);
-    try testing.expectApproxEqAbs(@as(f32, PLAYER_HEIGHT), hb.height(), 0.001);
-    try testing.expectApproxEqAbs(@as(f32, PLAYER_WIDTH), hb.width(), 0.001);
-    // Y: hotspot + offset - height..hotspot + offset
-    try testing.expectApproxEqAbs(pos_y + PLAYER_OFFSET_Y - PLAYER_HEIGHT, hb.min_y, 0.001);
-    try testing.expectApproxEqAbs(pos_y + PLAYER_OFFSET_Y, hb.max_y, 0.001);
+    const hb = frame_aabb(pos_x, pos_y, frame);
+    // hitbox_w = 24 - 2 = 22, hitbox_h = 32 - 2 = 30
+    // center_x = 100 + 0 = 100, bottom_y = 200 + 8 = 208
+    try testing.expectApproxEqAbs(@as(f32, 100 - 11), hb.min_x, 0.001);
+    try testing.expectApproxEqAbs(@as(f32, 100 + 11), hb.max_x, 0.001);
+    try testing.expectApproxEqAbs(@as(f32, 208 - 30), hb.min_y, 0.001);
+    try testing.expectApproxEqAbs(@as(f32, 208), hb.max_y, 0.001);
+    try testing.expectApproxEqAbs(@as(f32, 22), hb.width(), 0.001);
+    try testing.expectApproxEqAbs(@as(f32, 30), hb.height(), 0.001);
 }
 
 test "is_tile_pixel_solid" {

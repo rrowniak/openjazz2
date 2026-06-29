@@ -105,6 +105,7 @@ pub const Game = struct {
             alloc,
             &game.level.layers[3],
             &game.tileset,
+            &game.animset,
             game.level.animated_tiles,
             game.level.layers[3].width,
             game.level.layers[3].height,
@@ -174,6 +175,7 @@ pub const Game = struct {
             .playing => {
                 const keyboard = sdl.SDL_GetKeyboardState(null);
 
+                self.collision_sys.animset = &self.animset;
                 self.player.update(dt, keyboard, &self.level);
 
                 self.gctx.draw_ctx = .{
