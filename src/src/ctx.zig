@@ -20,4 +20,5 @@ pub const GameContext = struct {
     draw_ctx: DrawContext,
     cam_pos: m.WorldCoord,
     show_collision_mask: bool,
+    show_aabb: bool,
 };

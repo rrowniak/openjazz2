@@ -12,6 +12,7 @@ const context = @import("ctx.zig");
 const level_view = @import("level_view.zig");
 const player_module = @import("player.zig");
 const collision = @import("collision.zig");
+const g_anim = @import("g_anim.zig");
 
 pub const State = enum {
     menu,
@@ -98,6 +99,7 @@ pub const Game = struct {
                     .y = @intFromFloat(start_pos.y),
                 },
                 .show_collision_mask = false,
+                .show_aabb = false,
             },
         };
 
@@ -175,8 +177,15 @@ pub const Game = struct {
             .playing => {
                 const keyboard = sdl.SDL_GetKeyboardState(null);
 
+                // Refresh collision_sys pointers — Game was moved after init,
+                // so all pointers captured during CollisionSystem.init point
+                // to the old stack frame.
+                self.collision_sys.action_layer = &self.level.layers[3];
+                self.collision_sys.tileset = &self.tileset;
                 self.collision_sys.animset = &self.animset;
-                self.player.update(dt, keyboard, &self.level);
+                self.collision_sys.animated_tiles = self.level.animated_tiles;
+                self.collision_sys.time_elapsed = time_elapsed;
+                self.player.update(dt, keyboard, &self.collision_sys);
 
                 self.gctx.draw_ctx = .{
                     .tileset = &self.tileset,
@@ -199,6 +208,16 @@ pub const Game = struct {
                     &self.level_view.renderer_ind,
                     &self.gctx,
                 );
+
+                if (self.gctx.show_aabb) {
+                    const anim = &self.animset.blocks[self.player.anim_block].anims[self.player.anim_id];
+                    if (anim.frames.len > 0) {
+                        const frame_no = g_anim.calc_curr_frame_for_anim(self.player.anim_elapsed, anim);
+                        const frame = anim.frames[frame_no];
+                        const aabb = collision.frame_aabb(self.player.pos_x, self.player.pos_y, frame);
+                        self.level_view.draw_aabb(aabb, &self.gctx);
+                    }
+                }
 
                 self.level_view.draw(&self.level, &self.gctx, time_elapsed, 2, 0);
             },
@@ -253,6 +272,11 @@ fn show_cmd(alloc: std.mem.Allocator, ctx: *anyopaque, args: []const u8) ?[]cons
         return alloc.dupe(u8, "Collision mask overlay enabled") catch { return null; };
     }
 
+    if (std.mem.eql(u8, subcmd, "aabb")) {
+        self.gctx.show_aabb = true;
+        return alloc.dupe(u8, "Player AABB overlay enabled") catch { return null; };
+    }
+
     return std.fmt.allocPrint(alloc, "Unsupported `{s}` argument", .{subcmd}) catch { return null; };
 }
 
@@ -268,6 +292,11 @@ fn hide_cmd(alloc: std.mem.Allocator, ctx: *anyopaque, args: []const u8) ?[]cons
         self.gctx.show_collision_mask = false;
         self.tileset.destroy_mask_overlays();
         return alloc.dupe(u8, "Collision mask overlay disabled") catch { return null; };
+    }
+
+    if (std.mem.eql(u8, subcmd, "aabb")) {
+        self.gctx.show_aabb = false;
+        return alloc.dupe(u8, "Player AABB overlay disabled") catch { return null; };
     }
 
     return std.fmt.allocPrint(alloc, "Unsupported `{s}` argument", .{subcmd}) catch { return null; };

@@ -1,6 +1,7 @@
 const std = @import("std");
 const assets = @import("assets.zig");
 const asset_maps = @import("assets_maps.zig");
+const collision = @import("collision.zig");
 const gfx = @import("gfx");
 const gl = gfx.gl;
 const m = @import("g_math.zig");
@@ -21,12 +22,15 @@ pub const LevelView = struct {
     scroll_offsets: [8]gfx.math.Vec2,
     overlay_shader: Shader(MaskOverlayUniforms),
     overlay_ind_shader: Shader(MaskOverlayUniforms),
+    aabb_overlay_shader: Shader(MaskOverlayUniforms),
+    aabb_tex: gfx.gl_utils.Texture2D,
 
     const vertex_sh = @embedFile("./gfx/glsl/sprite.vert.glsl");
     const fragment_sh = @embedFile("./gfx/glsl/sprite.frag.glsl");
     const fragment_sh_ind = @embedFile("./gfx/glsl/sprite_ind.frag.glsl");
     const mask_overlay_frag = @embedFile("./gfx/glsl/mask_overlay.frag.glsl");
     const mask_overlay_ind_frag = @embedFile("./gfx/glsl/mask_overlay_ind.frag.glsl");
+    const aabb_overlay_frag = @embedFile("./gfx/glsl/aabb_overlay.frag.glsl");
 
     /// Initialises both RGBA and indexed-sprite renderers, plus the overlay
     /// shaders used for collision-mask display.  All share the same projection.
@@ -40,6 +44,8 @@ pub const LevelView = struct {
             .scroll_offsets = [_]gfx.math.Vec2{zero} ** 8,
             .overlay_shader = try .init(vertex_sh, mask_overlay_frag, null),
             .overlay_ind_shader = try .init(vertex_sh, mask_overlay_ind_frag, null),
+            .aabb_overlay_shader = try .init(vertex_sh, aabb_overlay_frag, null),
+            .aabb_tex = undefined,
         };
 
         // Share the main view/projection matrices with the overlay shaders.
@@ -53,10 +59,23 @@ pub const LevelView = struct {
         self.overlay_ind_shader.set_mat4(.projection, self.renderer.projection.m);
         self.overlay_ind_shader.set_mat4(.view, self.renderer.view.m);
 
+        self.aabb_overlay_shader.use_prog();
+        self.aabb_overlay_shader.set_int(.image, 0);
+        self.aabb_overlay_shader.set_mat4(.projection, self.renderer.projection.m);
+        self.aabb_overlay_shader.set_mat4(.view, self.renderer.view.m);
+
+        // 1×1 white RGBA texture for solid-colour overlay quads.
+        {
+            const white_pixel = [_]u8{ 255, 255, 255, 255 };
+            self.aabb_tex = try gfx.gl_utils.Texture2D.init_from_rgba(&white_pixel, 1, 1);
+        }
+
         return self;
     }
 
     pub fn deinit(self: *@This()) void {
+        self.aabb_tex.deinit();
+        self.aabb_overlay_shader.deinit();
         self.overlay_ind_shader.deinit();
         self.overlay_shader.deinit();
         self.renderer_ind.deinit();
@@ -278,6 +297,36 @@ pub const LevelView = struct {
 
         gl.glActiveTexture(gl.GL_TEXTURE0);
         texture.bind();
+
+        gl.glBindVertexArray(self.renderer.quadVAO);
+        gl.glDrawArrays(gl.GL_TRIANGLES, 0, 6);
+        gl.glBindVertexArray(0);
+    }
+
+    /// Draws a green semi-transparent filled rectangle for a world-space AABB.
+    /// The rectangle is drawn at screen coordinates derived from the camera offset.
+    pub fn draw_aabb(
+        self: *@This(),
+        aabb: collision.AABB,
+        gctx: *const context.GameContext,
+    ) void {
+        const w_2: f32 = @floatFromInt(@divTrunc(gctx.draw_ctx.scr_w, 2));
+        const h_2: f32 = @floatFromInt(@divTrunc(gctx.draw_ctx.scr_h, 2));
+        const cx: f32 = @floatFromInt(gctx.cam_pos.x);
+        const cy: f32 = @floatFromInt(gctx.cam_pos.y);
+
+        const base_off_x = @max(0, cx - w_2);
+        const base_off_y = @max(0, cy - h_2);
+
+        const sx: i32 = @intFromFloat(aabb.min_x - base_off_x);
+        const sy: i32 = @intFromFloat(aabb.min_y - base_off_y);
+
+        self.aabb_overlay_shader.use_prog();
+        self.aabb_overlay_shader.set_vec2(.pos, [2]f32{ @floatFromInt(sx), @floatFromInt(sy) });
+        self.aabb_overlay_shader.set_vec2(.spriteSize, [2]f32{ aabb.width(), aabb.height() });
+
+        gl.glActiveTexture(gl.GL_TEXTURE0);
+        self.aabb_tex.bind();
 
         gl.glBindVertexArray(self.renderer.quadVAO);
         gl.glDrawArrays(gl.GL_TRIANGLES, 0, 6);

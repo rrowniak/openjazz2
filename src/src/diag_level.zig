@@ -73,6 +73,7 @@ pub const DiagLevel = struct {
                 .draw_ctx = undefined,
                 .cam_pos = .{ .x = 1000, .y = 400 },
                 .show_collision_mask = false,
+                .show_aabb = false,
             },
         };
     }

@@ -64,25 +64,30 @@ pub const AABB = struct {
 /// Returns a world-space AABB for a sprite at `(pos_x, pos_y)` based on the
 /// given animation frame's hotspot, coldspot and dimensions.
 ///
-/// The hitbox is centred on `(pos + coldspot)` and uses a fallback size of
-/// `frame.size - 2` on each axis (matching jazz2‑native when no explicit
-/// BoundingBox metadata is present).
+/// Returns a world-space AABB for a sprite at `(pos_x, pos_y)` based on the
+/// given animation frame's hotspot, coldspot and dimensions.  The formula
+/// `pos - hotspot + coldspot` (matching jazz2‑native) gives the coldspot
+/// centre in world space.  A fallback size of `frame.size - 2` is used on
+/// each axis (matching jazz2‑native when no explicit BoundingBox metadata
+/// is present).
 pub fn frame_aabb(pos_x: f32, pos_y: f32, frame: assets.Frame) AABB {
     const fw: f32 = @floatFromInt(frame.width);
     const fh: f32 = @floatFromInt(frame.height);
+    const hx: f32 = @floatFromInt(frame.hotspotX);
+    const hy: f32 = @floatFromInt(frame.hotspotY);
     const csx: f32 = @floatFromInt(frame.coldspotX);
     const csy: f32 = @floatFromInt(frame.coldspotY);
 
     const hitbox_w = fw - 2;
     const hitbox_h = fh - 2;
-    const center_x = pos_x + csx;
-    const bottom_y = pos_y + csy;
+    const center_x = pos_x - hx + csx;
+    const bottom_y = pos_y - hy + csy;
 
     return AABB.init(
-        center_x - hitbox_w / 2,    // left edge
-        bottom_y - hitbox_h,        // top edge
-        center_x + hitbox_w / 2,    // right edge
-        bottom_y,                   // bottom edge
+        center_x - hitbox_w / 2,
+        bottom_y - hitbox_h,
+        center_x + hitbox_w / 2,
+        bottom_y,
     );
 }
 
@@ -540,6 +545,22 @@ pub const CollisionSystem = struct {
         };
     }
 
+    /// Convenience: checks `is_position_empty` using the system's stored
+    /// layer, tileset, animated tiles and time.
+    pub fn is_empty(self: *const @This(), aabb: AABB) bool {
+        return is_position_empty(aabb, self.action_layer, self.tileset, self.animated_tiles, self.time_elapsed);
+    }
+
+    /// Convenience: resolves along the X axis.
+    pub fn resolve_x(self: *const @This(), moved_aabb: AABB, vel_sign: i2) ?f32 {
+        return resolve_axis(moved_aabb, self.action_layer, self.tileset, self.animated_tiles, self.time_elapsed, 0, vel_sign);
+    }
+
+    /// Convenience: resolves along the Y axis.
+    pub fn resolve_y(self: *const @This(), moved_aabb: AABB, vel_sign: i2) ?f32 {
+        return resolve_axis(moved_aabb, self.action_layer, self.tileset, self.animated_tiles, self.time_elapsed, 1, vel_sign);
+    }
+
     /// Frees the spatial grid.  Does NOT free the pointer references.
     pub fn deinit(self: *@This()) void {
         self.grid.deinit();
@@ -611,11 +632,11 @@ test "frame_aabb" {
     const pos_y: f32 = 200;
     const hb = frame_aabb(pos_x, pos_y, frame);
     // hitbox_w = 24 - 2 = 22, hitbox_h = 32 - 2 = 30
-    // center_x = 100 + 0 = 100, bottom_y = 200 + 8 = 208
-    try testing.expectApproxEqAbs(@as(f32, 100 - 11), hb.min_x, 0.001);
-    try testing.expectApproxEqAbs(@as(f32, 100 + 11), hb.max_x, 0.001);
-    try testing.expectApproxEqAbs(@as(f32, 208 - 30), hb.min_y, 0.001);
-    try testing.expectApproxEqAbs(@as(f32, 208), hb.max_y, 0.001);
+    // center_x = 100 - 12 + 0 = 88, bottom_y = 200 - 32 + 8 = 176
+    try testing.expectApproxEqAbs(@as(f32, 88 - 11), hb.min_x, 0.001);
+    try testing.expectApproxEqAbs(@as(f32, 88 + 11), hb.max_x, 0.001);
+    try testing.expectApproxEqAbs(@as(f32, 176 - 30), hb.min_y, 0.001);
+    try testing.expectApproxEqAbs(@as(f32, 176), hb.max_y, 0.001);
     try testing.expectApproxEqAbs(@as(f32, 22), hb.width(), 0.001);
     try testing.expectApproxEqAbs(@as(f32, 30), hb.height(), 0.001);
 }
