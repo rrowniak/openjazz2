@@ -17,23 +17,32 @@ pub const PLAYER_OFFSET_Y: f32 = 8;
 
 /// Axis-aligned bounding box in world pixel space.
 pub const AABB = struct {
+    /// Minimum X (left edge) in world pixel coordinates.
     min_x: f32,
+    /// Minimum Y (top edge) in world pixel coordinates.
     min_y: f32,
+    /// Maximum X (right edge) in world pixel coordinates.
     max_x: f32,
+    /// Maximum Y (bottom edge) in world pixel coordinates.
     max_y: f32,
 
+    /// Creates an AABB from explicit min/max edges.
     pub fn init(min_x: f32, min_y: f32, max_x: f32, max_y: f32) AABB {
         return .{ .min_x = min_x, .min_y = min_y, .max_x = max_x, .max_y = max_y };
     }
 
+    /// Returns the box width (max_x - min_x).
     pub fn width(self: @This()) f32 {
         return self.max_x - self.min_x;
     }
 
+    /// Returns the box height (max_y - min_y).
     pub fn height(self: @This()) f32 {
         return self.max_y - self.min_y;
     }
 
+    /// Returns true if this box overlaps `other` (separating-axis test).
+    /// Edges that merely touch do NOT count as overlap.
     pub fn overlaps(self: @This(), other: @This()) bool {
         return self.min_x < other.max_x and
             self.max_x > other.min_x and
@@ -41,11 +50,14 @@ pub const AABB = struct {
             self.max_y > other.min_y;
     }
 
+    /// Returns true if the point `(px, py)` lies inside the box
+    /// (inclusive on the min edge, exclusive on the max edge).
     pub fn contains_point(self: @This(), px: f32, py: f32) bool {
         return px >= self.min_x and px < self.max_x and
             py >= self.min_y and py < self.max_y;
     }
 
+    /// Returns a new AABB shifted by `(dx, dy)` in world space.
     pub fn translate(self: @This(), dx: f32, dy: f32) AABB {
         return .{
             .min_x = self.min_x + dx,
@@ -59,17 +71,23 @@ pub const AABB = struct {
 // ── Player hitbox ──
 
 /// Returns the player's world-space AABB for the given hotspot position.
+///
+/// The hotspot is at center-bottom of the sprite. The box is centred
+/// horizontally on the hotspot and shifted up by `PLAYER_OFFSET_Y` so the
+/// collision region matches the character's waist-to-head span.
 pub fn player_aabb(pos_x: f32, pos_y: f32) AABB {
     return AABB.init(
-        pos_x - PLAYER_WIDTH / 2,
-        pos_y + PLAYER_OFFSET_Y - PLAYER_HEIGHT,
-        pos_x + PLAYER_WIDTH / 2,
-        pos_y + PLAYER_OFFSET_Y,
+        pos_x - PLAYER_WIDTH / 2,                  // left edge
+        pos_y + PLAYER_OFFSET_Y - PLAYER_HEIGHT,    // top edge
+        pos_x + PLAYER_WIDTH / 2,                   // right edge
+        pos_y + PLAYER_OFFSET_Y,                    // bottom edge
     );
 }
 
 // ── Collision flags ──
 
+/// Bit-packed flags returned after a collision resolve.
+/// Each field represents a single contact direction.
 pub const CollisionFlags = packed struct {
     on_ground: bool,
     touch_ceiling: bool,
@@ -81,6 +99,9 @@ pub const CollisionFlags = packed struct {
 
 /// Returns true if the pixel at `(local_x, local_y)` within the tile's
 /// collision mask is solid.  Applies flip transforms.
+///
+/// The mask is a 1‑bit‑per‑pixel bitmap stored row‑major. TILE_SIZE defines
+/// the tile dimension (typically 32 px) and BIT_MASK_SIZE = TILE_SIZE² / 8.
 pub fn is_tile_pixel_solid(
     mask: []const u8,
     flip_x: bool,
@@ -88,8 +109,10 @@ pub fn is_tile_pixel_solid(
     local_x: usize,
     local_y: usize,
 ) bool {
+    // Apply flips to map tile-local coords to mask coords.
     const px = if (flip_x) (assets.TILE_SIZE - 1) - local_x else local_x;
     const py = if (flip_y) (assets.TILE_SIZE - 1) - local_y else local_y;
+
     const bit_idx = py * assets.TILE_SIZE + px;
     const byte_idx = bit_idx / 8;
     const bit_off: u3 = @intCast(bit_idx % 8);
@@ -121,6 +144,9 @@ pub fn resolve_tileset_idx(
 
 /// Returns `true` if the given AABB does *not* overlap any solid tile pixels
 /// on the specified layer.  Returns `false` if a collision is detected.
+///
+/// Iterates all tiles that the AABB touches, then scans overlapping pixel
+/// regions against each tile's collision bitmask.
 pub fn is_position_empty(
     aabb: AABB,
     layer: *const assets.Layer,
@@ -128,26 +154,32 @@ pub fn is_position_empty(
     animated_tiles: []const asset_reader.AnimatedTile,
     time_elapsed: f32,
 ) bool {
+    // Layer with no cells is vacuously empty.
     const cells = layer.cells orelse return true;
     const layer_w: i32 = @intCast(layer.width);
     const layer_h: i32 = @intCast(layer.height);
 
+    // Tile-range that the AABB covers (clamped to layer bounds).
     const t_min_x = @max(@as(i32, @intFromFloat(@floor(aabb.min_x / 32))), 0);
     const t_min_y = @max(@as(i32, @intFromFloat(@floor(aabb.min_y / 32))), 0);
     const t_max_x = @min(@as(i32, @intFromFloat(@floor((aabb.max_x - 0.001) / 32))), layer_w - 1);
     const t_max_y = @min(@as(i32, @intFromFloat(@floor((aabb.max_y - 0.001) / 32))), layer_h - 1);
 
+    // AABB entirely outside the layer → empty.
     if (t_min_x > t_max_x or t_min_y > t_max_y) return true;
 
+    // Walk every overlapping tile.
     var ty: i32 = t_min_y;
     while (ty <= t_max_y) : (ty += 1) {
         const row = cells[@as(usize, @intCast(ty))];
         var tx: i32 = t_min_x;
         while (tx <= t_max_x) : (tx += 1) {
             const cell = row[@as(usize, @intCast(tx))];
+            // Empty cell (no tile placed).
             const maybe_lev_tile = cell.tile orelse continue;
             const lev_tile = maybe_lev_tile;
 
+            // Resolve tile index (handles animated tiles).
             const tileset_idx = resolve_tileset_idx(lev_tile.id, animated_tiles, time_elapsed);
             if (tileset_idx >= tileset.tiles.len) continue;
             const tile = &tileset.tiles[tileset_idx];
@@ -155,6 +187,7 @@ pub fn is_position_empty(
             const tile_world_x: i32 = tx * 32;
             const tile_world_y: i32 = ty * 32;
 
+            // Pixel-level overlap region between the AABB and this tile.
             const overlap_l = @max(@as(i32, @intFromFloat(aabb.min_x)), tile_world_x);
             const overlap_r = @min(@as(i32, @intFromFloat(aabb.max_x)), tile_world_x + 32);
             const overlap_t = @max(@as(i32, @intFromFloat(aabb.min_y)), tile_world_y);
@@ -162,6 +195,7 @@ pub fn is_position_empty(
 
             if (overlap_l >= overlap_r or overlap_t >= overlap_b) continue;
 
+            // Scan every overlapping pixel; if any is solid → colliding.
             var py: i32 = overlap_t;
             while (py < overlap_b) : (py += 1) {
                 var px: i32 = overlap_l;
@@ -188,8 +222,13 @@ pub fn is_position_empty(
 /// Returns the push-out distance needed to clear all solid tile pixels,
 /// or `null` if no collision occurred.
 ///
+/// The AABB is already at the *new* (displaced) position.  This function
+/// finds the minimum push-out that eliminates all overlaps with solid pixels
+/// along the given axis.
+///
+/// `axis`:    `0` = X, `1` = Y
 /// `vel_sign`: `-1` (moving left/up), `0` (stationary), `1` (moving right/down).
-///   Determines the push direction.
+///   Determines the push direction — we push back against the movement.
 pub fn resolve_axis(
     moved_aabb: AABB,
     layer: *const assets.Layer,
@@ -201,10 +240,12 @@ pub fn resolve_axis(
 ) ?f32 {
     if (vel_sign == 0) return null;
 
+    // No cells → nothing to collide with.
     const cells = layer.cells orelse return null;
     const layer_w: i32 = @intCast(layer.width);
     const layer_h: i32 = @intCast(layer.height);
 
+    // Tile-range that the displaced AABB covers.
     const t_min_x = @max(@as(i32, @intFromFloat(@floor(moved_aabb.min_x / 32))), 0);
     const t_min_y = @max(@as(i32, @intFromFloat(@floor(moved_aabb.min_y / 32))), 0);
     const t_max_x = @min(@as(i32, @intFromFloat(@floor((moved_aabb.max_x - 0.001) / 32))), layer_w - 1);
@@ -215,12 +256,14 @@ pub fn resolve_axis(
     var result_push: f32 = undefined;
     var found = false;
 
+    // Walk every overlapping tile.
     var ty: i32 = t_min_y;
     while (ty <= t_max_y) : (ty += 1) {
         const row = cells[@as(usize, @intCast(ty))];
         var tx: i32 = t_min_x;
         while (tx <= t_max_x) : (tx += 1) {
             const cell = row[@as(usize, @intCast(tx))];
+            // Empty cell → no collision.
             const maybe_lev_tile = cell.tile orelse continue;
             const lev_tile = maybe_lev_tile;
 
@@ -231,6 +274,7 @@ pub fn resolve_axis(
             const tile_world_x: i32 = tx * 32;
             const tile_world_y: i32 = ty * 32;
 
+            // Overlap rect in world pixel coords.
             const overlap_l = @max(@as(i32, @intFromFloat(moved_aabb.min_x)), tile_world_x);
             const overlap_r = @min(@as(i32, @intFromFloat(moved_aabb.max_x)), tile_world_x + 32);
             const overlap_t = @max(@as(i32, @intFromFloat(moved_aabb.min_y)), tile_world_y);
@@ -238,6 +282,7 @@ pub fn resolve_axis(
 
             if (overlap_l >= overlap_r or overlap_t >= overlap_b) continue;
 
+            // Scan overlapping pixels.
             var py: i32 = overlap_t;
             while (py < overlap_b) : (py += 1) {
                 var px: i32 = overlap_l;
@@ -251,14 +296,17 @@ pub fn resolve_axis(
                         lx,
                         ly,
                     )) {
+                        // Found a solid pixel — compute push distance.
                         if (axis == 0) {
                             if (vel_sign > 0) {
+                                // Moving right: push left (negative).
                                 const d = @as(f32, @floatFromInt(px)) - moved_aabb.max_x;
                                 if (!found or d < result_push) {
                                     result_push = d;
                                     found = true;
                                 }
                             } else {
+                                // Moving left: push right (positive).
                                 const d = (@as(f32, @floatFromInt(px)) + 1) - moved_aabb.min_x;
                                 if (!found or d > result_push) {
                                     result_push = d;
@@ -267,12 +315,14 @@ pub fn resolve_axis(
                             }
                         } else {
                             if (vel_sign > 0) {
+                                // Moving down: push up (negative).
                                 const d = @as(f32, @floatFromInt(py)) - moved_aabb.max_y;
                                 if (!found or d < result_push) {
                                     result_push = d;
                                     found = true;
                                 }
                             } else {
+                                // Moving up: push down (positive).
                                 const d = (@as(f32, @floatFromInt(py)) + 1) - moved_aabb.min_y;
                                 if (!found or d > result_push) {
                                     result_push = d;
@@ -294,14 +344,18 @@ pub fn resolve_axis(
 /// Simple spatial hash grid with fixed 32px cells.
 /// Stores entity IDs in cells they overlap.  Used for broad-phase entity-entity
 /// collision queries.
+///
+/// Register → Move → Query → Remove is the typical lifecycle for each entity.
 pub const SpatialGrid = struct {
     const Cell = std.ArrayListUnmanaged(usize);
 
+    /// Flat array of cells (row-major, num_cols × num_rows).
     cells: []Cell,
     num_cols: usize,
     num_rows: usize,
     alloc: std.mem.Allocator,
 
+    /// Allocates a grid with `num_cols × num_rows` cells, all initially empty.
     pub fn init(alloc: std.mem.Allocator, num_cols: usize, num_rows: usize) !SpatialGrid {
         const total = num_cols * num_rows;
         const cells = try alloc.alloc(Cell, total);
@@ -319,6 +373,8 @@ pub const SpatialGrid = struct {
         self.alloc.free(self.cells);
     }
 
+    /// Inserts `id` into all cells that the given AABB overlaps.
+    /// Idempotent — calling register twice for the same id will duplicate it.
     pub fn register(self: *@This(), id: usize, aabb: AABB) void {
         const r = self.cell_range(aabb);
         var row = r.row_min;
@@ -330,6 +386,8 @@ pub const SpatialGrid = struct {
         }
     }
 
+    /// Removes `id` from all cells that the given AABB overlaps.
+    /// Uses swap-remove (O(1) but does not preserve order).
     pub fn remove(self: *@This(), id: usize, aabb: AABB) void {
         const r = self.cell_range(aabb);
         var row = r.row_min;
@@ -347,6 +405,12 @@ pub const SpatialGrid = struct {
         }
     }
 
+    /// Moves `id` from `old_aabb` cells to `new_aabb` cells efficiently by
+    /// only touching cells that changed.
+    /// Moves `id` from `old_aabb` cells to `new_aabb` cells efficiently by
+    /// only touching cells that changed.
+    ///
+    /// Cells present in both old and new ranges are left untouched.
     pub fn move(self: *@This(), id: usize, old_aabb: AABB, new_aabb: AABB) void {
         const old_r = self.cell_range(old_aabb);
         const new_r = self.cell_range(new_aabb);
@@ -356,6 +420,7 @@ pub const SpatialGrid = struct {
         while (row <= old_r.row_max) : (row += 1) {
             var col = old_r.col_min;
             while (col <= old_r.col_max) : (col += 1) {
+                // Skip cells that are still in the new range.
                 if (row >= new_r.row_min and row <= new_r.row_max and
                     col >= new_r.col_min and col <= new_r.col_max) continue;
                 const cell = &self.cells[self.cell_idx(col, row)];
@@ -373,6 +438,7 @@ pub const SpatialGrid = struct {
         while (row <= new_r.row_max) : (row += 1) {
             var col = new_r.col_min;
             while (col <= new_r.col_max) : (col += 1) {
+                // Skip cells that were already in the old range.
                 if (row >= old_r.row_min and row <= old_r.row_max and
                     col >= old_r.col_min and col <= old_r.col_max) continue;
                 self.cells[self.cell_idx(col, row)].append(self.alloc, id) catch {};
@@ -380,6 +446,9 @@ pub const SpatialGrid = struct {
         }
     }
 
+    /// Calls `callback(context, id)` for every entity whose cell overlaps
+    /// the given query AABB.  May return the same id multiple times if an
+    /// entity spans multiple cells (caller should deduplicate).
     pub fn query(self: *@This(), aabb: AABB, context: anytype, callback: fn (@TypeOf(context), usize) void) void {
         const r = self.cell_range(aabb);
         var row = r.row_min;
@@ -393,10 +462,17 @@ pub const SpatialGrid = struct {
         }
     }
 
+    /// Returns the flat index into the `cells` array for grid (col, row).
     fn cell_idx(self: *@This(), col: usize, row: usize) usize {
         return row * self.num_cols + col;
     }
 
+    /// Returns the inclusive cell range that the given AABB covers,
+    /// clamped to grid bounds.
+    ///
+    /// Grid cells are 32×32 px, so dividing world coords by 32 gives the
+    /// cell index.  The -0.001 epsilon ensures aabb.max sits exactly on a
+    /// cell boundary maps to the correct cell (max is exclusive).
     fn cell_range(self: *@This(), aabb: AABB) struct { col_min: usize, col_max: usize, row_min: usize, row_max: usize } {
         const col_min: usize = @intCast(@max(@as(i32, @intFromFloat(@floor(aabb.min_x / 32))), 0));
         const col_max: usize = @min(
@@ -422,13 +498,27 @@ pub const SpatialGrid = struct {
 /// Holds references needed for tile collision queries so callers only pass
 /// the CollisionSystem pointer instead of individual layer/tileset/etc args.
 /// Owns a SpatialGrid for entity-entity broad-phase.
+///
+/// All pointer/reference fields must be refreshed each frame in the game
+/// update loop — they may become stale if the backing data is moved.
 pub const CollisionSystem = struct {
+    /// The action layer to run tile collision against.
     action_layer: *const assets.Layer,
+    /// The current tileset (for tile collision bitmasks).
     tileset: *const assets.Tileset,
+    /// Animated tile definitions (for resolving anim_tile IDs).
     animated_tiles: []const asset_reader.AnimatedTile,
+    /// Spatial grid for entity-entity broad-phase.
     grid: SpatialGrid,
+    /// Game time elapsed in seconds (for animated tile frame calc).
     time_elapsed: f32,
 
+    /// Creates a CollisionSystem with an empty SpatialGrid sized to the
+    /// action layer dimensions.
+    ///
+    /// The pointer fields (`action_layer`, `tileset`, `animated_tiles`)
+    /// default to whatever is passed in but **must be refreshed each frame**
+    /// in the game update loop.
     pub fn init(
         alloc: std.mem.Allocator,
         action_layer: *const assets.Layer,
@@ -446,6 +536,7 @@ pub const CollisionSystem = struct {
         };
     }
 
+    /// Frees the spatial grid.  Does NOT free the pointer references.
     pub fn deinit(self: *@This()) void {
         self.grid.deinit();
     }
