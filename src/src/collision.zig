@@ -90,7 +90,7 @@ pub fn player_aabb(pos_x: f32, pos_y: f32) AABB {
 // ── Frame hitbox ──
 
 /// Returns a world‑space AABB for a sprite at `(pos_x, pos_y)` based on the
-/// given animation frame's hotspot and coldspot (matching jazz2‑native).
+/// given animation frame's hotspot and coldspot.
 /// The formula `pos - hotspot + coldspot` gives the coldspot centre in world
 /// space; a fallback size of `frame.size - 2` is used on each axis.
 pub fn frame_aabb(pos_x: f32, pos_y: f32, frame: assets.Frame) AABB {
