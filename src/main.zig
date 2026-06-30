@@ -20,16 +20,16 @@ const DEFAULT_LEVEL = "/home/rr/Games/Jazz2/Castle1.j2l";
 const DEFAULT_SONG = "/home/rr/Games/Jazz2/Castle.j2b";
 
 /// Entry point: parses CLI args and runs the selected diagnostic mode.
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
+    const fs = @import("utils").fs;
+    fs.init(init.io);
     std.debug.print("\nStarting {s}\n", .{"OpenJazz2"});
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+    const alloc = init.gpa;
 
-    var args = try std.process.argsWithAllocator(alloc);
-    defer args.deinit();
-    const prog_name = args.next() orelse "program";
-    const command = args.next() orelse DEFAULT_COMMAND;
+    var args_iter = try init.minimal.args.iterateAllocator(alloc);
+    defer args_iter.deinit();
+    const prog_name = args_iter.next() orelse "program";
+    const command = args_iter.next() orelse DEFAULT_COMMAND;
     // if (!std.mem.eql(u8, command, "gfx")) {
     //     // init gfx, sound, window
     //     try gfx.init();
@@ -50,20 +50,20 @@ pub fn main() !void {
         app = game_mod.app_cast();
     } else if (std.mem.eql(u8, command, "tileset")) {
         // filename
-        const arg = args.next() orelse DEFAULT_TILESET;
+        const arg = args_iter.next() orelse DEFAULT_TILESET;
         tilesets = try .init(alloc, arg);
         app = tilesets.app_cast();
     } else if (std.mem.eql(u8, command, "animset")) {
         // filename
-        const arg = args.next() orelse DEFAULT_ANIMSET;
+        const arg = args_iter.next() orelse DEFAULT_ANIMSET;
         animsets = try .init(alloc, arg);
         app = animsets.app_cast();
     } else if (std.mem.eql(u8, command, "level")) {
-        const arg = args.next() orelse DEFAULT_LEVEL;
+        const arg = args_iter.next() orelse DEFAULT_LEVEL;
         level = try .init(alloc, arg);
         app = level.app_cast();
     } else if (std.mem.eql(u8, command, "sound")) {
-        const arg = args.next() orelse DEFAULT_SONG;
+        const arg = args_iter.next() orelse DEFAULT_SONG;
         sound = try .init(alloc, arg);
         app = sound.app_cast();
     } else if (std.mem.eql(u8, command, "gfx")) {

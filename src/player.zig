@@ -69,8 +69,10 @@ pub const Player = struct {
 
     fn handle_input(self: *Player, dt: f32, keyboard: [*c]const bool) void {
         _ = dt;
-        const move_speed: f32 = 200.0;
-        const jump_power: f32 = -420.0;
+        //const move_speed: f32 = 200.0;
+        // const jump_power: f32 = -420.0;
+        const move_speed: f32 = 300.0;
+        const jump_power: f32 = -620.0;
 
         if (keyboard[gfx.sdl.SDL_SCANCODE_LEFT]) {
             self.vel_x = -move_speed;
@@ -173,7 +175,7 @@ pub const Player = struct {
             } else {
                 self.move_state = .Fall;
             }
-        } else if (@abs(self.vel_x) > 100) {
+        } else if (@abs(self.vel_x) > 400) {
             self.move_state = .Run;
         } else if (@abs(self.vel_x) > 0) {
             self.move_state = .Walk;

@@ -13,6 +13,7 @@ const level_view = @import("level_view.zig");
 const player_module = @import("player.zig");
 const collision = @import("collision.zig");
 const g_anim = @import("g_anim.zig");
+const sound = @import("sound.zig");
 
 pub const State = enum {
     menu,
@@ -40,6 +41,7 @@ pub const Game = struct {
     collision_sys: collision.CollisionSystem,
     prev_tick: u32,
     gctx: context.GameContext,
+    sound_mgr: sound.SoundManager,
 
     pub fn init(alloc: std.mem.Allocator, j2l_path: []const u8) !Game {
         const scr_w: i32 = 1400;
@@ -91,6 +93,7 @@ pub const Game = struct {
             .player = player,
             .prev_tick = @intCast(gfx.sdl.SDL_GetTicks()),
             .fps_counter = .init(),
+            .sound_mgr = undefined,
             .collision_sys = undefined,
             .gctx = .{
                 .draw_ctx = undefined,
@@ -112,6 +115,21 @@ pub const Game = struct {
             game.level.layers[3].width,
             game.level.layers[3].height,
         );
+
+        game.sound_mgr = try sound.SoundManager.init(alloc);
+
+        const music_name = std.mem.sliceTo(&level.music_file_name, 0);
+        if (music_name.len > 0) {
+            const music_path = utils.find_file_case_insensitive(alloc, dir, music_name) catch null;
+            if (music_path) |mp| {
+                defer alloc.free(mp);
+                const music_data = utils.read_file_to_buff(alloc, mp) catch null;
+                if (music_data) |md| {
+                    defer alloc.free(md);
+                    game.sound_mgr.begin_play_music(md) catch {};
+                }
+            }
+        }
 
         return game;
     }
@@ -135,6 +153,7 @@ pub const Game = struct {
         self.animset.deinit();
         self.level.deinit();
         self.collision_sys.deinit();
+        self.sound_mgr.deinit();
         self.shell.deinit();
         self.gfx_sys.deinit();
     }
@@ -224,6 +243,7 @@ pub const Game = struct {
             else => {},
         }
 
+        self.sound_mgr.update();
         self.shell.render_shell(events);
         self.fps_counter.tick(self.allocator, self.shell.font, &self.level_view.renderer, self.scr_w);
     }

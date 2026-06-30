@@ -329,7 +329,7 @@ pub const Level = struct {
     // bonus_level_name: []u8,
     // next_level_name: []u8,
     // secret_level_name: []u8,
-    // music_file_name: []u8,
+    music_file_name: [32]u8,
     layers: [8]Layer,
     animated_tiles: []@import("assets_reader.zig").AnimatedTile,
 

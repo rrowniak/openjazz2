@@ -3,6 +3,7 @@ const std = @import("std");
 pub const sdl = @cImport({
     @cInclude("SDL3/SDL.h");
     @cInclude("SDL3_ttf/SDL_ttf.h");
+    @cInclude("SDL3_mixer/SDL_mixer.h");
 });
 
 pub const gl = @cImport({
@@ -13,6 +14,8 @@ pub const gl = @cImport({
 
 const Self = @This();
 const print = std.debug.print;
+
+pub var g_mixer: ?*sdl.MIX_Mixer = null;
 
 sdl_window: ?*sdl.SDL_Window = null,
 gl_context: sdl.SDL_GLContext = null,
@@ -30,6 +33,9 @@ pub fn init(window_name: [*c]const u8, width: u16, height: u16) !Self {
         print("TTF_Init failed: {s}\n", .{sdl.SDL_GetError()});
         return error.TTF_Init_Failed;
     }
+
+    _ = sdl.MIX_Init();
+    g_mixer = sdl.MIX_CreateMixerDevice(sdl.SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, null);
 
     // looking for OpenGL 3.3
     if (!sdl.SDL_GL_SetAttribute(sdl.SDL_GL_CONTEXT_MAJOR_VERSION, 3)) {
@@ -92,8 +98,10 @@ pub fn init(window_name: [*c]const u8, width: u16, height: u16) !Self {
 pub fn deinit(self: Self) void {
     _ = sdl.SDL_GL_DestroyContext(self.gl_context);
     sdl.SDL_DestroyWindow(self.sdl_window);
+    sdl.MIX_Quit();
     sdl.TTF_Quit();
     sdl.SDL_Quit();
+    g_mixer = null;
 }
 
 /// Swaps the OpenGL front and back buffers.

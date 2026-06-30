@@ -389,7 +389,7 @@ pub const SpatialGrid = struct {
     pub fn init(alloc: std.mem.Allocator, num_cols: usize, num_rows: usize) !SpatialGrid {
         const total = num_cols * num_rows;
         const cells = try alloc.alloc(Cell, total);
-        for (cells) |*c| c.* = .{};
+        for (cells) |*c| c.* = .empty;
         return .{
             .cells = cells,
             .num_cols = num_cols,

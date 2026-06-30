@@ -12,7 +12,7 @@ const Error = error{EnumConversionError};
 /// - `T`: Type to read (e.g., u32, struct, enum)
 /// - `file`: Pointer to an open `std.fs.File` for reading.
 /// Returns: The value of type `T` or an error.
-pub fn fread(comptime T: type, file: *std.fs.File) (std.Io.Reader.Error || Error || std.posix.ReadError)!T {
+pub fn fread(comptime T: type, file: anytype) !T {
     const endian = builtin.cpu.arch.endian();
     return fread_ex(T, file, endian);
 }
@@ -21,7 +21,7 @@ pub fn fread(comptime T: type, file: *std.fs.File) (std.Io.Reader.Error || Error
 /// - `T`: Type to read
 /// - `file`: Pointer to an open `std.fs.File`
 /// - `endian`: Endianness to use (big or little)
-pub fn fread_ex(comptime T: type, file: *std.fs.File, endian: std.builtin.Endian) (std.Io.Reader.Error || Error || std.posix.ReadError)!T {
+pub fn fread_ex(comptime T: type, file: anytype, endian: std.builtin.Endian) !T {
     var buff: [size_of(T)]u8 = undefined;
     const r = try file.read(&buff);
     if (r != buff.len) {

@@ -1,4 +1,5 @@
 const std = @import("std");
+const fs = @import("fs.zig");
 
 ///
 /// File utilities
@@ -13,7 +14,7 @@ pub fn find_file_case_insensitive(
     dirname: []const u8,
     wanted_name: []const u8,
 ) ![]u8 {
-    var dir = try std.fs.cwd().openDir(dirname, .{ .iterate = true });
+    var dir = try fs.cwd().openDir(dirname, .{ .iterate = true });
     defer dir.close();
 
     var it = dir.iterate();
@@ -38,15 +39,13 @@ pub fn read_file_to_buff(
     allocator: std.mem.Allocator,
     filename: []const u8,
 ) ![]u8 {
-    const cwd = std.fs.cwd();
+    var stats = try fs.cwd().openFile(filename, .{});
+    defer stats.close();
 
-    const file = try cwd.openFile(filename, .{});
-    defer file.close();
+    const stat = try stats.stat();
+    const buff = try allocator.alloc(u8, stat.size);
 
-    const stat = try file.stat();
-    var buff = try allocator.alloc(u8, stat.size);
-
-    buff = try cwd.readFile(filename, buff);
+    _ = try stats.read(buff);
     return buff;
 }
 

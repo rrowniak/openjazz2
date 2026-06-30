@@ -1,5 +1,6 @@
 const assets = @import("assets.zig");
 const easy_bit = @import("utils").easy_bit;
+const fs = @import("utils").fs;
 const std = @import("std");
 const info = std.log.info;
 const err = std.log.err;
@@ -113,7 +114,7 @@ const TilesetInfo = struct {
 /// Loads a .j2t tileset file: reads header, decompresses blocks, and constructs tiles.
 pub fn load_tileset(allocator: std.mem.Allocator, path: []const u8) !assets.Tileset {
     info("Loading tileset {s}", .{path});
-    var file = try std.fs.cwd().openFile(path, .{});
+    var file = try fs.cwd().openFile(path, .{});
     defer file.close();
 
     const header = try easy_bit.fread(TilesetHeader, &file);
@@ -318,7 +319,7 @@ const SampleData = struct {
 /// Loads a .j2a animation set: reads the ALIB header, decompresses blocks, builds anims and samples.
 pub fn load_animset(allocator: std.mem.Allocator, path: []const u8) !assets.Animset {
     info("Loading animset {s}", .{path});
-    var file = try std.fs.cwd().openFile(path, .{});
+    var file = try fs.cwd().openFile(path, .{});
     defer file.close();
 
     const header = try easy_bit.fread(AnimlibHeader, &file);
@@ -332,7 +333,7 @@ pub fn load_animset(allocator: std.mem.Allocator, path: []const u8) !assets.Anim
         return error.InvalidFormat;
     }
 
-    var anim_blocks: AnimBlockAddr = .{ 
+    const anim_blocks: AnimBlockAddr = .{ 
         .addresses = try allocator.alloc(i32, @intCast(header.count)),
     };
     defer allocator.free(anim_blocks.addresses);
@@ -345,7 +346,7 @@ pub fn load_animset(allocator: std.mem.Allocator, path: []const u8) !assets.Anim
     _ = try file.read(std.mem.sliceAsBytes(anim_blocks.addresses));
     for (anim_blocks.addresses, 0..) |a, i| {
         // read set
-        try file.seekTo(@intCast(a));
+        file.seekTo(@intCast(a));
         const anim_header = try easy_bit.fread(AnimHeader, &file);
 
         if (!std.mem.eql(u8, &anim_header.magic, "ANIM")) {
@@ -556,7 +557,7 @@ pub const AnimatedTile = struct {
 /// Loads a .j2l level file: reads LEVL header, decompresses blocks, parses events and tile layout.
 pub fn load_level(allocator: std.mem.Allocator, path: []const u8) !assets.Level {
     info("Loading level {s}", .{path});
-    var file = try std.fs.cwd().openFile(path, .{});
+    var file = try fs.cwd().openFile(path, .{});
     defer file.close();
 
     const header = try easy_bit.fread(LevelHeader, &file);
@@ -706,6 +707,7 @@ pub fn load_level(allocator: std.mem.Allocator, path: []const u8) !assets.Level 
     const ret: assets.Level = .{
         .alloc = allocator,
         .tileset_name = lev_info.tileset,
+        .music_file_name = lev_info.music_file,
         .layers = layers,
         .animated_tiles = lev_info.animated_tiles,
     };
@@ -735,7 +737,7 @@ const MusicHeader = struct {
 /// Loads a .j2b music file: reads MUSE header, decompresses the content block.
 pub fn load_music(allocator: std.mem.Allocator, path: []const u8) !struct{format: u32, data:[]u8} {
     info("Loading music {s}", .{path});
-    var file = try std.fs.cwd().openFile(path, .{});
+    var file = try fs.cwd().openFile(path, .{});
     defer file.close();
 
     const header = try easy_bit.fread(MusicHeader, &file);
@@ -761,9 +763,7 @@ comptime {
 }
 
 test "struct from memory" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    var alloc = gpa.allocator();
+    const alloc = std.testing.allocator;
 
     const TestStruct = struct {
         f1: u8,
@@ -807,9 +807,7 @@ test "Loading tileset" {
     gfx.init_window(); 
     defer gfx.deinit();
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    var a = try load_tileset(gpa.allocator(), "/home/rr/Games/Jazz2/Jungle1.j2t");
+    var a = try load_tileset(std.testing.allocator, "/home/rr/Games/Jazz2/Jungle1.j2t");
     defer a.deinit();
 }
 
@@ -819,9 +817,7 @@ test "Loading anims" {
     gfx.init_window(); 
     defer gfx.deinit();
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    var a = try load_animset(gpa.allocator(), "/home/rr/Games/Jazz2/Anims.j2a");
+    var a = try load_animset(std.testing.allocator, "/home/rr/Games/Jazz2/Anims.j2a");
     defer a.deinit();
 }
 
@@ -835,7 +831,7 @@ test "Load all .j2t tilesets from TEST_DATA_TILES "  {
     defer gfx.deinit();
 
     // Try opening the directory
-    var dir = std.fs.cwd().openDir(dir_path, .{ .iterate = true }) catch |d_err| {
+    var dir = fs.cwd().openDir(dir_path, .{ .iterate = true }) catch |d_err| {
         if (d_err == error.FileNotFound) {
             std.debug.print("Skipping test: directory '{s}' not found.\n", .{dir_path});
             return; // gracefully skip test if folder missing

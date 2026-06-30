@@ -118,7 +118,7 @@ pub const Console = struct {
     }
 
     pub fn register_cmd(self: *@This(), name: []const u8, cmd: CommandFn, ctx: *anyopaque) void {
-        var entry = self.commands.getOrPut(name) catch {
+        const entry = self.commands.getOrPut(name) catch {
             return;
         };
         entry.value_ptr.* = .{ .fun = cmd, .ctx = ctx };

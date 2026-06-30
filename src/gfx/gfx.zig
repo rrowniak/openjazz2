@@ -12,7 +12,7 @@ var g_screen_w: c_int = 1400;
 var g_screen_h: c_int = 800;
 
 var g_sdl_events: std.array_list.Managed(sdl.SDL_Event) = undefined;
-var g_alloc = std.heap.GeneralPurposeAllocator(.{}){};
+var g_alloc = std.heap.c_allocator;
 
 var g_mixer: ?*sdl.MIX_Mixer = null;
 
@@ -40,7 +40,7 @@ pub fn init() !void {
 
     _ = sdl.TTF_Init();
 
-    g_sdl_events = .init(g_alloc.allocator());
+    g_sdl_events = .{ .allocator = g_alloc, .items = &.{}, .capacity = 0 };
 
     _ = sdl.MIX_Init();
     g_mixer = sdl.MIX_CreateMixerDevice(sdl.SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, null);
@@ -319,10 +319,8 @@ pub const Sound = struct {
         _ = sdl.MIX_PlayAudio(g_mixer, self.chunk);
     }
 
-    /// Placeholder deinit for Sound (audio cleanup not yet implemented).
     pub fn deinit(self: *@This()) void {
-        _ = self;
-        // sdl.MIX_DestroyAudio(self.chunk);
+        sdl.MIX_DestroyAudio(self.chunk);
     }
 };
 
