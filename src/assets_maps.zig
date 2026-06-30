@@ -814,3 +814,16 @@ pub fn is_enemy_event(id: EventId) bool {
         else => false,
     };
 }
+
+/// Returns `true` for events whose animation plays continuously (e.g. coins, gems, food).
+/// Returns `false` for events that should remain static until triggered (e.g. springs, checkpoints, crates).
+pub fn event_always_animates(id: EventId) bool {
+    return switch (id) {
+        .GemCrate, .BouncerAmmoPlus15,
+        .RedSpring, .GreenSpring, .BlueSpring,
+        .HorRedSpring, .HorGreenSpring, .HorBlueSpring,
+        .Savepointsignpost,
+        => false,
+        else => true,
+    };
+}

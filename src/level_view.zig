@@ -189,7 +189,8 @@ pub const LevelView = struct {
                     }
                     if (asset_maps.event2animsetinxd(ev.id)) |anim| {
                         const a = &animset.blocks[anim.animblock].anims[anim.anim];
-                        const frame = g_anim.calc_curr_frame_for_anim(time_elapsed, a);
+                        const elapsed = if (asset_maps.event_always_animates(ev.id)) time_elapsed else 0;
+                        const frame = g_anim.calc_curr_frame_for_anim(elapsed, a);
                         const obj = a.frames[frame];
                         render_tex(self, obj.texture, palettes[palette_id], sx + obj.hotspotX + 16, sy + obj.hotspotY + 16);
 
