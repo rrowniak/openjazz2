@@ -178,6 +178,7 @@ pub const LevelView = struct {
             while (tx < tile_end_x) : (tx += 1) {
                 if (tx < 0 or tx >= layer_w) continue;
                 if (cells[@as(usize, @intCast(ty))][@as(usize, @intCast(tx))].event) |ev| {
+                    if (asset_maps.is_enemy_event(ev.id)) continue;
                     const sx = tx * tile_size_i32 - off_x_int;
                     const sy = ty * tile_size_i32 - off_y_int;
 

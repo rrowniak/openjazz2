@@ -239,25 +239,172 @@ const ANIM_SET_BONUS_50: usize = 106;
 
 // Enemies
 
-// Witch
+// Bat (set 1)
+pub const ANIM_SET_BAT: usize = 1;
+pub const ANIM_BAT_IDLE: usize = 0;
+pub const ANIM_BAT_RESTING: usize = 1;
+pub const ANIM_BAT_TAKEOFF_1: usize = 2;
+pub const ANIM_BAT_TAKEOFF_2: usize = 3;
+pub const ANIM_BAT_ROOST: usize = 4;
 
-const ANIM_SET_WITCH: usize = 108;
-const ANIM_WITCH_CAST: usize = 0;
-const ANIM_WITCH_DEATH: usize = 1;
-const ANIM_WITCH_FLY: usize = 2;
-const ANIM_WITCH_SPELL: usize = 3;
+// Bee (set 15)
+pub const ANIM_SET_BEE: usize = 15;
+pub const ANIM_BEE_FLY: usize = 0;
+pub const ANIM_BEE_TURN: usize = 1;
 
-// End of Witch
+// Caterpillar (set 20)
+pub const ANIM_SET_CATERPILLAR: usize = 20;
+pub const ANIM_CATERPILLAR_EXHALE_START: usize = 0;
+pub const ANIM_CATERPILLAR_EXHALE: usize = 1;
+pub const ANIM_CATERPILLAR_DISORIENTED: usize = 2;
+pub const ANIM_CATERPILLAR_IDLE: usize = 3;
+pub const ANIM_CATERPILLAR_INHALE_START: usize = 4;
+pub const ANIM_CATERPILLAR_INHALE: usize = 5;
+pub const ANIM_CATERPILLAR_SMOKE: usize = 6;
 
-// Normal Turtle
+// Demon (set 24)
+pub const ANIM_SET_DEMON: usize = 24;
+pub const ANIM_DEMON_IDLE: usize = 0;
+pub const ANIM_DEMON_ATTACK_START: usize = 1;
+pub const ANIM_DEMON_ATTACK: usize = 2;
+pub const ANIM_DEMON_ATTACK_END: usize = 3;
 
-const ANIM_SET_NORM_TURTLE: usize = 99;
-const ANIM_NORM_TURT_BITE: usize = 0;
-const ANIM_NORM_TURT_CHEW: usize = 1;
-const ANIM_NORM_TURT_START_REVERSE: usize = 2;
-const ANIM_NORM_TURT_END_REVERSE: usize = 3;
-const ANIM_NORM_TURT_DEAD: usize = 4;
-const ANIM_NORM_TURT_WALK: usize = 7;
+// Dragonfly (set 31)
+pub const ANIM_SET_DRAGONFLY: usize = 31;
+pub const ANIM_DRAGONFLY_IDLE: usize = 0;
+
+// Dragon (set 32)
+pub const ANIM_SET_DRAGON: usize = 32;
+pub const ANIM_DRAGON_ATTACK: usize = 0;
+pub const ANIM_DRAGON_IDLE: usize = 1;
+pub const ANIM_DRAGON_TURN: usize = 2;
+
+// Fish (set 42)
+pub const ANIM_SET_FISH: usize = 42;
+pub const ANIM_FISH_ATTACK: usize = 0;
+pub const ANIM_FISH_IDLE: usize = 1;
+
+// Helmut (set 52)
+pub const ANIM_SET_HELMUT: usize = 52;
+pub const ANIM_HELMUT_IDLE: usize = 0;
+pub const ANIM_HELMUT_WALK: usize = 1;
+
+// LabRat (set 58)
+pub const ANIM_SET_LAB_RAT: usize = 58;
+pub const ANIM_LAB_RAT_ATTACK: usize = 0;
+pub const ANIM_LAB_RAT_IDLE: usize = 1;
+pub const ANIM_LAB_RAT_WALK: usize = 2;
+
+// Lizard (set 59)
+pub const ANIM_SET_LIZARD: usize = 59;
+pub const ANIM_LIZARD_COPTER_ATTACK: usize = 0;
+pub const ANIM_LIZARD_BOMB: usize = 1;
+pub const ANIM_LIZARD_COPTER_IDLE: usize = 2;
+pub const ANIM_LIZARD_COPTER: usize = 3;
+pub const ANIM_LIZARD_WALK: usize = 4;
+
+// Monkey (set 63)
+pub const ANIM_SET_MONKEY: usize = 63;
+pub const ANIM_MONKEY_WALK: usize = 0;
+pub const ANIM_MONKEY_JUMP: usize = 1;
+pub const ANIM_MONKEY_WALK_START: usize = 2;
+pub const ANIM_MONKEY_WALK_END: usize = 3;
+pub const ANIM_MONKEY_ATTACK_START: usize = 4;
+pub const ANIM_MONKEY_ATTACK_END: usize = 5;
+pub const ANIM_MONKEY_BANANA: usize = 6;
+pub const ANIM_MONKEY_BANANA_SPLAT: usize = 7;
+pub const ANIM_MONKEY_IDLE: usize = 8;
+
+// Moth (set 64)
+pub const ANIM_SET_MOTH: usize = 64;
+pub const ANIM_MOTH_GREEN: usize = 0;
+pub const ANIM_MOTH_GRAY: usize = 1;
+pub const ANIM_MOTH_PURPLE: usize = 2;
+pub const ANIM_MOTH_PINK: usize = 3;
+
+// Rapier (set 72)
+pub const ANIM_SET_RAPIER: usize = 72;
+pub const ANIM_RAPIER_ATTACK: usize = 0;
+pub const ANIM_RAPIER_ATTACK_SWING: usize = 1;
+pub const ANIM_RAPIER_IDLE: usize = 2;
+pub const ANIM_RAPIER_ATTACK_START: usize = 3;
+pub const ANIM_RAPIER_ATTACK_END: usize = 4;
+
+// Raven (set 73)
+pub const ANIM_SET_RAVEN: usize = 73;
+pub const ANIM_RAVEN_ATTACK: usize = 0;
+pub const ANIM_RAVEN_IDLE: usize = 1;
+pub const ANIM_RAVEN_TURN: usize = 2;
+
+// RocketTurtle (set 76)
+pub const ANIM_SET_ROCKET_TURTLE: usize = 76;
+pub const ANIM_ROCKET_TURT_DOWNRIGHT: usize = 0;
+pub const ANIM_ROCKET_TURT_UPRIGHT: usize = 1;
+pub const ANIM_ROCKET_TURT_SMOKE: usize = 2;
+pub const ANIM_ROCKET_TURT_DOWNRIGHT_TO_UPRIGHT: usize = 3;
+
+// Skeleton (set 79)
+pub const ANIM_SET_SKELETON: usize = 79;
+pub const ANIM_SKELETON_BONE: usize = 0;
+pub const ANIM_SKELETON_SKULL: usize = 1;
+pub const ANIM_SKELETON_WALK: usize = 2;
+
+// Sparks (set 84)
+pub const ANIM_SET_SPARKS: usize = 84;
+pub const ANIM_SPARKS_IDLE: usize = 0;
+
+// Sucker (set 95)
+pub const ANIM_SET_SUCKER: usize = 95;
+pub const ANIM_SUCKER_WALK_TOP: usize = 0;
+pub const ANIM_SUCKER_INFLATED_DEFLATE: usize = 1;
+pub const ANIM_SUCKER_WALK_VER_DOWN: usize = 2;
+pub const ANIM_SUCKER_FALL: usize = 3;
+pub const ANIM_SUCKER_INFLATED: usize = 4;
+pub const ANIM_SUCKER_POOF: usize = 5;
+pub const ANIM_SUCKER_WALK: usize = 6;
+pub const ANIM_SUCKER_WALK_VER_UP: usize = 7;
+
+// TubeTurtle (set 96)
+pub const ANIM_SET_TUBE_TURTLE: usize = 96;
+pub const ANIM_TUBE_TURT_IDLE: usize = 0;
+
+// TurtleBoss (set 97)
+pub const ANIM_SET_TURTLE_BOSS: usize = 97;
+pub const ANIM_TURTLE_BOSS_ATTACK_START: usize = 0;
+pub const ANIM_TURTLE_BOSS_ATTACK_END: usize = 1;
+pub const ANIM_TURTLE_BOSS_SHELL: usize = 2;
+pub const ANIM_TURTLE_BOSS_MACE: usize = 3;
+pub const ANIM_TURTLE_BOSS_IDLE: usize = 4;
+pub const ANIM_TURTLE_BOSS_WALK: usize = 5;
+
+// TufTurt (set 98)
+pub const ANIM_SET_TUFF_TURT: usize = 98;
+pub const ANIM_TUFF_TURT_WALK: usize = 0;
+
+// Normal Turtle (set 99)
+pub const ANIM_SET_NORM_TURTLE: usize = 99;
+pub const ANIM_NORM_TURT_BITE: usize = 0;
+pub const ANIM_NORM_TURT_CHEW: usize = 1;
+pub const ANIM_NORM_TURT_START_REVERSE: usize = 2;
+pub const ANIM_NORM_TURT_END_REVERSE: usize = 3;
+pub const ANIM_NORM_TURT_DEAD: usize = 4;
+pub const ANIM_NORM_TURT_SHELL_REVERSE: usize = 5;
+pub const ANIM_NORM_TURT_SHELL: usize = 6;
+pub const ANIM_NORM_TURT_IDLE: usize = 6;
+pub const ANIM_NORM_TURT_WALK: usize = 7;
+
+// Crab (set 101)
+pub const ANIM_SET_CRAB: usize = 101;
+pub const ANIM_CRAB_FALL: usize = 0;
+pub const ANIM_CRAB_FALL_END: usize = 1;
+pub const ANIM_CRAB_WALK: usize = 2;
+
+// Witch (set 108)
+pub const ANIM_SET_WITCH: usize = 108;
+pub const ANIM_WITCH_CAST: usize = 0;
+pub const ANIM_WITCH_DEATH: usize = 1;
+pub const ANIM_WITCH_FLY: usize = 2;
+pub const ANIM_WITCH_SPELL: usize = 3;
 
 // zig fmt: off
 pub const EventId = enum(u8) {
@@ -646,4 +793,24 @@ pub fn event2animsetinxd(id: EventId) ?assets.AnimsetIndex {
         else => {},
     }
     return null;
+}
+
+/// Returns true if the event ID corresponds to an enemy type.
+pub fn is_enemy_event(id: EventId) bool {
+    return switch (id) {
+        .Bat, .Bee, .Bees, .BeeBoy,
+        .Caterpillar, .Crab, .Demon, .Dragon, .DragonFly,
+        .Fish, .FloatLizard,
+        .Helmut,
+        .LabRat, .Lizard,
+        .Monkey,
+        .Moth,
+        .NormTurtle,
+        .Rapier, .Raven, .RocketTurtle,
+        .Skeleton, .Sparks, .StandMonkey, .Sucker, .FloatingSucker,
+        .TubeTurtle, .TufTurt, .TufBoss,
+        .Witch,
+        => true,
+        else => false,
+    };
 }

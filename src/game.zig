@@ -14,6 +14,7 @@ const player_module = @import("player.zig");
 const collision = @import("collision.zig");
 const g_anim = @import("g_anim.zig");
 const sound = @import("sound.zig");
+const enemy_module = @import("enemy.zig");
 
 pub const State = enum {
     menu,
@@ -38,6 +39,7 @@ pub const Game = struct {
     scr_h: i32,
     fps_counter: gfx.fps.FpsCounter,
     player: player_module.Player,
+    enemies: std.ArrayList(enemy_module.Enemy),
     collision_sys: collision.CollisionSystem,
     prev_tick: u32,
     gctx: context.GameContext,
@@ -91,6 +93,7 @@ pub const Game = struct {
             .scr_w = scr_w,
             .scr_h = scr_h,
             .player = player,
+            .enemies = .empty,
             .prev_tick = @intCast(gfx.sdl.SDL_GetTicks()),
             .fps_counter = .init(),
             .sound_mgr = undefined,
@@ -133,6 +136,25 @@ pub const Game = struct {
             }
         }
 
+        {
+            const event_layer = &game.level.layers[3];
+            const cells = event_layer.cells.?;
+            const tile_size: f32 = @floatFromInt(m.TileCoord.SIZE);
+            for (cells, 0..) |row, ty| {
+                for (row, 0..) |cell, tx| {
+                    if (cell.event) |ev| {
+                        if (asset_maps.is_enemy_event(ev.id)) {
+                            const x = @as(f32, @floatFromInt(tx)) * tile_size + tile_size / 2;
+                            const y = @as(f32, @floatFromInt(ty)) * tile_size + tile_size / 2;
+                            if (enemy_module.Enemy.init(ev.id, x, y)) |e| {
+                                game.enemies.append(alloc, e) catch {};
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         return game;
     }
 
@@ -155,6 +177,7 @@ pub const Game = struct {
         self.animset.deinit();
         self.level.deinit();
         self.collision_sys.deinit();
+        self.enemies.deinit(self.allocator);
         self.sound_mgr.deinit();
         self.shell.deinit();
         self.gfx_sys.deinit();
@@ -208,6 +231,10 @@ pub const Game = struct {
                 self.collision_sys.time_elapsed = time_elapsed;
                 self.player.update(dt, keyboard, &self.collision_sys);
 
+                for (self.enemies.items) |*e| {
+                    e.update(dt, &self.collision_sys);
+                }
+
                 self.gctx.draw_ctx = .{
                     .tileset = &self.tileset,
                     .animset = &self.animset,
@@ -229,6 +256,14 @@ pub const Game = struct {
                     &self.level_view.renderer_ind,
                     &self.gctx,
                 );
+
+                for (self.enemies.items) |*e| {
+                    e.draw(
+                        &self.level_view.renderer,
+                        &self.level_view.renderer_ind,
+                        &self.gctx,
+                    );
+                }
 
                 if (self.gctx.show_aabb) {
                     const anim = &self.animset.blocks[self.player.anim_block].anims[self.player.anim_id];
