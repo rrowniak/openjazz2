@@ -294,7 +294,7 @@ pub const Game = struct {
 
         self.sound_mgr.update();
         self.shell.render_shell(events);
-        self.fps_counter.tick(self.allocator, self.shell.font, &self.level_view.renderer, self.scr_w);
+        self.fps_counter.tick(self.allocator, self.shell.font, &self.level_view.renderer, self.scr_w, self.scr_h);
     }
 };
 

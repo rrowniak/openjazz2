@@ -13,16 +13,18 @@ OpenJazz2 is a from-scratch re-implementation of the classic platformer game **J
 - **Animated tiles** with ping-pong frame cycling
 - **Indexed & full-color sprite rendering** via OpenGL 3.3 Core shaders
 - **Player** — Jazz character with movement, jumping, buttstomp, and basic physics
+- **Enemies** — movement, animation, and rendering (no player interaction yet)
 - **Collision detection** — tile-based collisions, AABB queries, spatial grid
 - **Animation system** — time-based frame calculation with RLE decoding
 - **J2B music playback** via libopenmpt (loaded at runtime with `dlopen`)
 - **Sound effects** via SDL3_mixer
 - **In-game developer console** (toggle with `~`)
+- **Camera zoom** — zoom in/out with `+`/`-` keys (1x–4x)
 - **FPS counter** and collision mask overlay
 - **Diagnostic tools** — standalone viewers for tilesets, animations, levels, and audio
 
 ### Not yet implemented
-- Enemies, weapons, items, power-ups
+- Weapons, items, power-ups (enemy interaction)
 - Menus, HUD, scoring
 - Network / multiplayer
 

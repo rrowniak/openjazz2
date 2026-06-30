@@ -29,6 +29,7 @@ pub const FpsCounter = struct {
         font: *sdl.TTF_Font,
         renderer: *gfx.gl_utils.SpriteRenderer,
         scr_w: i32,
+        scr_h: i32,
     ) void {
         const now_ms = gfx.sdl.SDL_GetTicks();
         const elapsed_ms = now_ms - self.last_fps_time;
@@ -60,9 +61,25 @@ pub const FpsCounter = struct {
         }
 
         if (self.text_tex) |tex| {
+            // UI elements must draw in screen-space, unaffected by camera zoom.
+            const saved_proj = renderer.projection;
+            const screen_proj = gfx.math.Mat4x4.init_ortho(
+                0.0,
+                @floatFromInt(scr_w),
+                @floatFromInt(scr_h),
+                0.0,
+                -1.0,
+                1.0,
+            );
+            renderer.projection = screen_proj;
+            renderer.shader.set_mat4(.projection, screen_proj.m);
+
             const x = @as(f32, @floatFromInt(scr_w)) - @as(f32, @floatFromInt(tex.w)) - 10.0;
             const pos = gfx.math.Vec2.init(x, 10.0);
             renderer.draw(tex, pos, gfx.math.Vec3.init(1.0, 1.0, 1.0));
+
+            renderer.projection = saved_proj;
+            renderer.shader.set_mat4(.projection, saved_proj.m);
         }
     }
 };
