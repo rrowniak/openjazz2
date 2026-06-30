@@ -118,8 +118,10 @@ pub const Game = struct {
 
         game.sound_mgr = try sound.SoundManager.init(alloc);
 
-        const music_name = std.mem.sliceTo(&level.music_file_name, 0);
-        if (music_name.len > 0) {
+        const music_basename = std.mem.sliceTo(&level.music_file_name, 0);
+        if (music_basename.len > 0) {
+            const music_name = try std.fmt.allocPrint(alloc, "{s}.j2b", .{music_basename});
+            defer alloc.free(music_name);
             const music_path = utils.find_file_case_insensitive(alloc, dir, music_name) catch null;
             if (music_path) |mp| {
                 defer alloc.free(mp);
@@ -213,8 +215,8 @@ pub const Game = struct {
                     .scr_w = self.scr_w,
                     .scr_h = self.scr_h,
                 };
-                const cam_to_x: u32 = @intFromFloat(self.player.pos_x);
-                const cam_to_y: u32 = @intFromFloat(self.player.pos_y);
+                const cam_to_x: u32 = @intFromFloat(@max(0.0, self.player.pos_x));
+                const cam_to_y: u32 = @intFromFloat(@max(0.0, self.player.pos_y));
                 const w2: u32 = @intCast(@divTrunc(self.gctx.draw_ctx.scr_w, 2));
                 const h2: u32 = @intCast(@divTrunc(self.gctx.draw_ctx.scr_h, 2));
                 self.gctx.cam_pos.x = @max(w2, cam_to_x);
