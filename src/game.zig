@@ -266,12 +266,12 @@ pub const Game = struct {
                 }
 
                 if (self.gctx.show_aabb) {
-                    const anim = &self.animset.blocks[self.player.anim_block].anims[self.player.anim_id];
-                    if (anim.frames.len > 0) {
-                        const frame_no = g_anim.calc_curr_frame_for_anim(self.player.anim_elapsed, anim);
-                        const frame = anim.frames[frame_no];
-                        const aabb = collision.frame_aabb(self.player.pos_x, self.player.pos_y, frame);
+                    {
+                        const aabb = collision.player_aabb(self.player.pos_x, self.player.pos_y);
                         self.level_view.draw_aabb(aabb, &self.gctx);
+                    }
+                    for (self.enemies.items) |*e| {
+                        self.level_view.draw_aabb(e.aabb(), &self.gctx);
                     }
                 }
 

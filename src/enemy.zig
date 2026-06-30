@@ -163,7 +163,7 @@ pub const Enemy = struct {
         }
     }
 
-    fn aabb(self: *const Enemy) collision.AABB {
+    pub fn aabb(self: *const Enemy) collision.AABB {
         return collision.AABB.init(
             self.pos_x - self.width / 2,
             self.pos_y - self.height,
