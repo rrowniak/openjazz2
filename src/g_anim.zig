@@ -4,9 +4,8 @@ const assets = @import("assets.zig");
 
 /// Returns the current frame index for an animation based on elapsed time and its frame rate.
 pub fn calc_curr_frame_for_anim(elapsed_in_sec: f32, anim: *const assets.Anim) usize {
-    // return calc_curr_frame(elapsed_in_sec, anim.frames.len, anim.frame_rate, false);
     const frame_rate = @as(f32, @floatFromInt(anim.frame_rate));
-    const ttimef = elapsed_in_sec * frame_rate / 12;
+    const ttimef = elapsed_in_sec * frame_rate;
     const ttimei = @as(usize, @intFromFloat(@round(ttimef)));
 
     return ttimei % anim.frames.len;
