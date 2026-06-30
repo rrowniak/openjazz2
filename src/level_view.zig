@@ -171,6 +171,7 @@ pub const LevelView = struct {
         const layer_w: i32 = @intCast(layer.width);
         const layer_h: i32 = @intCast(layer.height);
         const tile_size_i32: i32 = @intCast(TileCoord.SIZE);
+        const half_tile: i32 = tile_size_i32 / 2;
         var ty: i32 = tile_start_y;
         while (ty < tile_end_y) : (ty += 1) {
             if (ty < 0 or ty >= layer_h) continue;
@@ -189,13 +190,18 @@ pub const LevelView = struct {
                     }
                     if (asset_maps.event2animsetinxd(ev.id)) |anim| {
                         const a = &animset.blocks[anim.animblock].anims[anim.anim];
-                        const elapsed = if (asset_maps.event_always_animates(ev.id)) time_elapsed else 0;
+                        const always = asset_maps.event_always_animates(ev.id);
+                        const elapsed = if (always) time_elapsed else 0;
                         const frame = g_anim.calc_curr_frame_for_anim(elapsed, a);
                         const obj = a.frames[frame];
-                        render_tex(self, obj.texture, palettes[palette_id], sx + obj.hotspotX + 16, sy + obj.hotspotY + 16);
+                        // Horizontal: hotspotX offsets from tile centre (half_tile).
+                        // Vertical (always-animating): hotspotY offsets from tile centre.
+                        // Vertical (trigger-only): sprite bottom aligns with tile bottom.
+                        const dy = if (always) sy + obj.hotspotY + half_tile else sy + tile_size_i32 - obj.height;
+                        render_tex(self, obj.texture, palettes[palette_id], sx + obj.hotspotX + half_tile, dy);
 
                         if (show_collision_mask) {
-                            self.render_mask_overlay(obj.texture, sx + obj.hotspotX + 16, sy + obj.hotspotY + 16);
+                            self.render_mask_overlay(obj.texture, sx + obj.hotspotX + half_tile, dy);
                         }
                     }
                 }
