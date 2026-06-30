@@ -221,15 +221,30 @@ pub const LevelView = struct {
         from: usize,
         to: usize,
     ) void {
-        const w_2: f32 = @floatFromInt(@divTrunc(gctx.draw_ctx.scr_w, 2));
-        const h_2: f32 = @floatFromInt(@divTrunc(gctx.draw_ctx.scr_h, 2));
+        const zoom = gctx.zoom;
+        const scr_w_f: f32 = @floatFromInt(gctx.draw_ctx.scr_w);
+        const scr_h_f: f32 = @floatFromInt(gctx.draw_ctx.scr_h);
+
+        // Update projection for all renderers so the same screen coordinates
+        // map to a larger/smaller visible area when zoomed.
+        const proj = gfx.math.Mat4x4.init_ortho(0.0, scr_w_f / zoom, scr_h_f / zoom, 0.0, -1.0, 1.0);
+        self.renderer.projection = proj;
+        self.renderer.shader.set_mat4(.projection, proj.m);
+        self.renderer_ind.projection = proj;
+        self.renderer_ind.shader.set_mat4(.projection, proj.m);
+        self.overlay_shader.set_mat4(.projection, proj.m);
+        self.overlay_ind_shader.set_mat4(.projection, proj.m);
+        self.aabb_overlay_shader.set_mat4(.projection, proj.m);
+
+        const w_2: f32 = scr_w_f / 2;
+        const h_2: f32 = scr_h_f / 2;
         const cx: f32 = @floatFromInt(gctx.cam_pos.x);
         const cy: f32 = @floatFromInt(gctx.cam_pos.y);
         const show_collision_mask = gctx.show_collision_mask;
 
-        // Camera centre → top-left corner of the visible area.
-        const base_off_x = @max(0, cx - w_2);
-        const base_off_y = @max(0, cy - h_2);
+        // Camera centre → top-left corner of the visible area (zoom-aware).
+        const base_off_x = @max(0, cx - w_2 / zoom);
+        const base_off_y = @max(0, cy - h_2 / zoom);
 
         // Enable blending when showing collision overlays.
         const blend_was_enabled = if (show_collision_mask)
@@ -258,14 +273,12 @@ pub const LevelView = struct {
             const layer_off_y = base_off_y * layer.speed_y + self.scroll_offsets[num].v[1];
 
             const tile_size_f: f32 = @floatFromInt(TileCoord.SIZE);
-            const scr_w_f: f32 = @floatFromInt(gctx.draw_ctx.scr_w);
-            const scr_h_f: f32 = @floatFromInt(gctx.draw_ctx.scr_h);
 
-            // Visible tile range (inclusive start, exclusive end).
+            // Visible tile range (zoom shrinks/grows the visible area).
             const tile_start_x: i32 = @intFromFloat(@floor(layer_off_x / tile_size_f));
             const tile_start_y: i32 = @intFromFloat(@floor(layer_off_y / tile_size_f));
-            const tile_end_x: i32 = @intFromFloat(@ceil((layer_off_x + scr_w_f) / tile_size_f));
-            const tile_end_y: i32 = @intFromFloat(@ceil((layer_off_y + scr_h_f) / tile_size_f));
+            const tile_end_x: i32 = @intFromFloat(@ceil((layer_off_x + scr_w_f / zoom) / tile_size_f));
+            const tile_end_y: i32 = @intFromFloat(@ceil((layer_off_y + scr_h_f / zoom) / tile_size_f));
 
             // Pixel-precise sub-tile offset for smooth scrolling.
             const off_x_int: i32 = @intFromFloat(@floor(layer_off_x));
@@ -318,13 +331,14 @@ pub const LevelView = struct {
         aabb: collision.AABB,
         gctx: *const context.GameContext,
     ) void {
+        const zoom = gctx.zoom;
         const w_2: f32 = @floatFromInt(@divTrunc(gctx.draw_ctx.scr_w, 2));
         const h_2: f32 = @floatFromInt(@divTrunc(gctx.draw_ctx.scr_h, 2));
         const cx: f32 = @floatFromInt(gctx.cam_pos.x);
         const cy: f32 = @floatFromInt(gctx.cam_pos.y);
 
-        const base_off_x = @max(0, cx - w_2);
-        const base_off_y = @max(0, cy - h_2);
+        const base_off_x = @max(0, cx - w_2 / zoom);
+        const base_off_y = @max(0, cy - h_2 / zoom);
 
         const sx: i32 = @intFromFloat(aabb.min_x - base_off_x);
         const sy: i32 = @intFromFloat(aabb.min_y - base_off_y);

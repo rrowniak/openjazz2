@@ -215,8 +215,9 @@ pub const Player = struct {
         const cy: f32 = @floatFromInt(cam_pos.y);
         const sw: f32 = @floatFromInt(scr_w);
         const sh: f32 = @floatFromInt(scr_h);
-        const base_off_x = @max(0, cx - sw / 2);
-        const base_off_y = @max(0, cy - sh / 2);
+        const zoom = gctx.zoom;
+        const base_off_x = @max(0, cx - sw / (2 * zoom));
+        const base_off_y = @max(0, cy - sh / (2 * zoom));
 
         const screen_x = @as(i32, @intFromFloat(self.pos_x - base_off_x));
         const screen_y = @as(i32, @intFromFloat(self.pos_y - base_off_y));

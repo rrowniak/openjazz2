@@ -21,4 +21,5 @@ pub const GameContext = struct {
     cam_pos: m.WorldCoord,
     show_collision_mask: bool,
     show_aabb: bool,
+    zoom: f32 = 1.0,
 };

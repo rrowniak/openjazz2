@@ -221,6 +221,15 @@ pub const Game = struct {
             .playing => {
                 const keyboard = sdl.SDL_GetKeyboardState(null);
 
+                // Zoom controls
+                if (keyboard[sdl.SDL_SCANCODE_EQUALS] or keyboard[sdl.SDL_SCANCODE_KP_PLUS]) {
+                    self.gctx.zoom *= 1.0 + dt * 2.0;
+                }
+                if (keyboard[sdl.SDL_SCANCODE_MINUS] or keyboard[sdl.SDL_SCANCODE_KP_MINUS]) {
+                    self.gctx.zoom /= 1.0 + dt * 2.0;
+                }
+                self.gctx.zoom = @max(1.0, @min(4.0, self.gctx.zoom));
+
                 // Refresh collision_sys pointers — Game was moved after init,
                 // so all pointers captured during CollisionSystem.init point
                 // to the old stack frame.
@@ -246,8 +255,11 @@ pub const Game = struct {
                 const cam_to_y: u32 = @intFromFloat(@max(0.0, self.player.pos_y));
                 const w2: u32 = @intCast(@divTrunc(self.gctx.draw_ctx.scr_w, 2));
                 const h2: u32 = @intCast(@divTrunc(self.gctx.draw_ctx.scr_h, 2));
-                self.gctx.cam_pos.x = @max(w2, cam_to_x);
-                self.gctx.cam_pos.y = @max(h2, cam_to_y);
+                const zoom = self.gctx.zoom;
+                const min_cam_x: u32 = @intFromFloat(@as(f32, @floatFromInt(w2)) / zoom);
+                const min_cam_y: u32 = @intFromFloat(@as(f32, @floatFromInt(h2)) / zoom);
+                self.gctx.cam_pos.x = @max(min_cam_x, cam_to_x);
+                self.gctx.cam_pos.y = @max(min_cam_y, cam_to_y);
 
                 self.level_view.draw(&self.level, &self.gctx, time_elapsed, self.level.layers.len - 1, 3);
 
