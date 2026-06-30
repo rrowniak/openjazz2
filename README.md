@@ -2,8 +2,8 @@
 
 OpenJazz2 is a from-scratch re-implementation of the classic platformer game **Jazz Jackrabbit 2** (1998, Epic MegaGames) written in **Zig**. It reads the original game's data files and renders them using modern OpenGL 3.3 through SDL3.
 
-> **Status:** Early development / pre-alpha. The engine can load and display levels,
-> tilesets, animations, and play music, but the game is not yet playable.
+> **Status:** Early development / pre-alpha. Levels, tilesets, animations, and music
+> load and render, but the game is not yet fully playable.
 
 ## Features
 
@@ -13,26 +13,26 @@ OpenJazz2 is a from-scratch re-implementation of the classic platformer game **J
 - **Animated tiles** with ping-pong frame cycling
 - **Indexed & full-color sprite rendering** via OpenGL 3.3 Core shaders
 - **Player** — Jazz character with movement, jumping, buttstomp, and basic physics
+- **Collision detection** — tile-based collisions, AABB queries, spatial grid
 - **Animation system** — time-based frame calculation with RLE decoding
-- **J2B music playback** via libopenmpt
+- **J2B music playback** via libopenmpt (loaded at runtime with `dlopen`)
+- **Sound effects** via SDL3_mixer
 - **In-game developer console** (toggle with `~`)
 - **FPS counter** and collision mask overlay
 - **Diagnostic tools** — standalone viewers for tilesets, animations, levels, and audio
 
 ### Not yet implemented
-- Collision detection against tiles
 - Enemies, weapons, items, power-ups
 - Menus, HUD, scoring
-- Sound effects
 - Network / multiplayer
 
 ## Requirements
 
-- **Zig** `0.16.0-dev.747+493ad58ff` or later
+- **Zig** `0.16.0` or later
 - **SDL3** — `apt install libsdl3-dev`
 - **SDL3_ttf** — build from [source](https://github.com/libsdl-org/SDL_ttf) (needs `libfreetype-dev`)
 - **SDL3_mixer** — `apt install libsdl3-mixer-dev`
-- **libopenmpt** — `apt install libopenmpt-dev` (loaded at runtime via `dlopen`)
+- **libopenmpt** — `apt install libopenmpt` (loaded at runtime via `dlopen`)
 - **OpenGL 3.3** compatible GPU + drivers
 - Original **Jazz Jackrabbit 2** game data files (.j2t, .j2a, .j2l, .j2b)
 
@@ -41,7 +41,7 @@ OpenJazz2 is a from-scratch re-implementation of the classic platformer game **J
 ```bash
 # Clone the repo
 git clone <url>
-cd openjazz2/src
+cd openjazz2
 
 # Build
 zig build
@@ -86,9 +86,8 @@ Tests are written inline using Zig's built-in `test` blocks. Run them with:
 zig build test
 ```
 
-Test files are enumerated in `build.zig`. The `test_data/` directory contains sample
-asset files used by the test suite.
+Test files are enumerated in `build.zig`.
 
 ## License
 
-GNU General Public License v3.0. See [LICENSE](../LICENSE).
+GNU General Public License v3.0. See [LICENSE](LICENSE).
