@@ -180,6 +180,21 @@ pub const Enemy = struct {
             if (self.vel_y > 900.0) self.vel_y = 900.0;
         }
 
+        // Edge detection — turn around if no ground ahead
+        if (self.on_ground) {
+            const front_x = if (self.facing_left)
+                self.pos_x - self.width / 2
+            else
+                self.pos_x + self.width / 2;
+            const probe = if (self.facing_left)
+                collision.AABB.init(front_x - 3.0, self.pos_y, front_x - 1.0, self.pos_y + 16.0)
+            else
+                collision.AABB.init(front_x + 1.0, self.pos_y, front_x + 3.0, self.pos_y + 16.0);
+            if (cs.is_empty(probe)) {
+                self.facing_left = !self.facing_left;
+            }
+        }
+
         self.vel_x = if (self.facing_left) -self.move_speed else self.move_speed;
 
         const dx = self.vel_x * dt;
