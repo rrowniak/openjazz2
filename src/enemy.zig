@@ -300,13 +300,12 @@ pub const Enemy = struct {
 
         const palette_id: usize = 0;
 
+        const dy = screen_y - frame.height;
         if (self.facing_left) {
             const dx = screen_x + frame.width + frame.hotspotX;
-            const dy = screen_y + frame.hotspotY;
             render_tex_mirrored(renderer, renderer_ind, frame.texture, palettes[palette_id], dx, dy, frame.width, frame.height);
         } else {
             const dx = screen_x + frame.hotspotX;
-            const dy = screen_y + frame.hotspotY;
             render_tex(renderer, renderer_ind, frame.texture, palettes[palette_id], dx, dy, frame.width, frame.height);
         }
     }
