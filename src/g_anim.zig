@@ -1,5 +1,3 @@
-const std = @import("std");
-const gfx = @import("gfx").gfx;
 const assets = @import("assets.zig");
 
 /// Returns the current frame index for an animation based on elapsed time and its frame rate.

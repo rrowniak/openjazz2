@@ -1,4 +1,3 @@
-const std = @import("std");
 const gfx = @import("gfx");
 
 pub const IApp = struct {

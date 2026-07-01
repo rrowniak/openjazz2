@@ -3,7 +3,6 @@ const asset_maps = @import("assets_maps.zig");
 const collision = @import("collision.zig");
 const gfx = @import("gfx");
 const g_anim = @import("g_anim.zig");
-const m = @import("g_math.zig");
 const context = @import("ctx.zig");
 
 pub const PlayerType = enum(u8) {

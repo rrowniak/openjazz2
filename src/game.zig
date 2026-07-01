@@ -12,7 +12,6 @@ const context = @import("ctx.zig");
 const level_view = @import("level_view.zig");
 const player_module = @import("player.zig");
 const collision = @import("collision.zig");
-const g_anim = @import("g_anim.zig");
 const sound = @import("sound.zig");
 const enemy_module = @import("enemy.zig");
 

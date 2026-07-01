@@ -1,5 +1,4 @@
 const std = @import("std");
-const print = @import("std").debug.print;
 
 // const gfx = @import("gfx").gfx;
 // const assets = @import("assets.zig");
@@ -10,8 +9,6 @@ const diag_level = @import("diag_level.zig");
 const diag_sound = @import("diag_sound.zig");
 const diag_gfx = @import("diag_gfx.zig");
 const game = @import("game.zig");
-
-pub const log_level: std.log.Level = .debug;
 
 const DEFAULT_COMMAND = "game";
 const DEFAULT_TILESET = "/home/rr/Games/Jazz2/Jungle1.j2t";

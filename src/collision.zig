@@ -116,15 +116,6 @@ pub fn frame_aabb(pos_x: f32, pos_y: f32, frame: assets.Frame) AABB {
 
 // ── Collision flags ──
 
-/// Bit-packed flags returned after a collision resolve.
-/// Each field represents a single contact direction.
-pub const CollisionFlags = packed struct {
-    on_ground: bool,
-    touch_ceiling: bool,
-    touch_wall_left: bool,
-    touch_wall_right: bool,
-};
-
 // ── Tile pixel helpers ──
 
 /// Returns true if the pixel at `(local_x, local_y)` within the tile's
@@ -933,15 +924,4 @@ test "SpatialGrid — AABB spans multiple cells" {
     try testing.expect(count >= 1);
 }
 
-test "CollisionFlags packed" {
-    const flags = CollisionFlags{
-        .on_ground = true,
-        .touch_ceiling = false,
-        .touch_wall_left = true,
-        .touch_wall_right = false,
-    };
-    try testing.expect(flags.on_ground);
-    try testing.expect(!flags.touch_ceiling);
-    try testing.expect(flags.touch_wall_left);
-    try testing.expect(!flags.touch_wall_right);
-}
+

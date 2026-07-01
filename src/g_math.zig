@@ -18,22 +18,6 @@ pub const TileCoord = struct {
             .y =  y, 
         };
     }
-    // top right
-    // ceil truncation
-    /// Converts a world coordinate to a tile index, rounding up (ceil) for the bottom-right.
-    pub fn init_from_world_br(world: WorldCoord) TileCoord {
-        const wx = @as(usize, @intCast(world.x));
-        const wy = @as(usize, @intCast(world.y)); 
-        return .{
-            .x = @divFloor(wx, TileCoord.SIZE) + 1,
-            .y = @divFloor(wy, TileCoord.SIZE) + 1,
-        };
-    }
-};
-
-pub const ScreenCoord = struct {
-    x: i32,
-    y: i32,
 };
 
 pub const WorldCoord = struct {

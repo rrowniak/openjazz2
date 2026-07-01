@@ -802,20 +802,18 @@ test "struct from memory" {
 }
 
 test "Loading tileset" {
-    const gfx = @import("gfx").gfx;
-    try gfx.init();
-    gfx.init_window(); 
-    defer gfx.deinit();
+    const sys = @import("gfx").sys;
+    var gfx_sys = try sys.init("test", 640, 480);
+    defer gfx_sys.deinit();
 
     var a = try load_tileset(std.testing.allocator, "/home/rr/Games/Jazz2/Jungle1.j2t");
     defer a.deinit();
 }
 
 test "Loading anims" {
-    const gfx = @import("gfx").gfx;
-    try gfx.init();
-    gfx.init_window(); 
-    defer gfx.deinit();
+    const sys = @import("gfx").sys;
+    var gfx_sys = try sys.init("test", 640, 480);
+    defer gfx_sys.deinit();
 
     var a = try load_animset(std.testing.allocator, "/home/rr/Games/Jazz2/Anims.j2a");
     defer a.deinit();
@@ -825,10 +823,9 @@ test "Loading anims" {
 test "Load all .j2t tilesets from TEST_DATA_TILES "  {
     const allocator = std.testing.allocator;
     const dir_path = TEST_DATA_TILES;
-    const gfx = @import("gfx").gfx;
-    try gfx.init();
-    gfx.init_window();
-    defer gfx.deinit();
+    const sys = @import("gfx").sys;
+    var gfx_sys = try sys.init("test", 640, 480);
+    defer gfx_sys.deinit();
 
     // Try opening the directory
     var dir = fs.cwd().openDir(dir_path, .{ .iterate = true }) catch |d_err| {
@@ -861,10 +858,9 @@ test "Load all .j2t tilesets from TEST_DATA_TILES "  {
 }
 
 test "Loading level" {
-    const gfx = @import("gfx").gfx;
-    try gfx.init();
-    gfx.init_window();
-    defer gfx.deinit();
+    const sys = @import("gfx").sys;
+    var gfx_sys = try sys.init("test", 640, 480);
+    defer gfx_sys.deinit();
     var alloc = std.heap.DebugAllocator(.{}){};
     defer _ = alloc.deinit();
     var l = try load_level(alloc.allocator(), "/home/rr/Games/Jazz2/Castle1.j2l");

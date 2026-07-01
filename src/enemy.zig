@@ -1,4 +1,3 @@
-const std = @import("std");
 const assets = @import("assets.zig");
 const asset_maps = @import("assets_maps.zig");
 const collision = @import("collision.zig");
