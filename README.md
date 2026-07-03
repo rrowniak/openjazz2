@@ -5,6 +5,8 @@ OpenJazz2 is a from-scratch re-implementation of the classic platformer game **J
 > **Status:** Early development / pre-alpha. Levels, tilesets, animations, and music
 > load and render, but the game is not yet fully playable.
 
+![Screenshot](img/screenshot.jpg)
+
 ## Features
 
 ### Implemented
