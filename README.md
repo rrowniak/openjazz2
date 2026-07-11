@@ -1,6 +1,6 @@
 # OpenJazz2
 
-OpenJazz2 is a from-scratch re-implementation of the classic platformer game **Jazz Jackrabbit 2** (1998, Epic MegaGames) written in **Zig**. It reads the original game's data files and renders them using modern OpenGL 3.3 through SDL3.
+OpenJazz2 is a from-scratch re-implementation of the classic platformer game **Jazz Jackrabbit 2** (1998, Epic MegaGames) written in **Zig**. It reads the original game's data files and renders them using OpenGL 3.3 through SDL3.
 
 > **Status:** Early development / pre-alpha. Levels, tilesets, animations, and music
 > load and render, but the game is not yet fully playable.

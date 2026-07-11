@@ -196,9 +196,8 @@ pub fn is_position_empty(
         var tx: i32 = t_min_x;
         while (tx <= t_max_x) : (tx += 1) {
             const cell = row[@as(usize, @intCast(tx))];
-            // Empty cell (no tile placed).
-            const maybe_lev_tile = cell.tile orelse continue;
-            const lev_tile = maybe_lev_tile;
+            // Empty cell (no tile placed)?
+            const lev_tile = cell.tile orelse continue;
 
             // Resolve tile index (handles animated tiles).
             const tileset_idx = resolve_tileset_idx(lev_tile.id, animated_tiles, time_elapsed);

@@ -815,6 +815,46 @@ pub fn is_enemy_event(id: EventId) bool {
     };
 }
 
+/// Categorises a level event as a collectible pickup type.
+/// Returns `null` if the event is not a collectible.
+pub const PickupType = enum {
+    gem_red,
+    gem_green,
+    gem_blue,
+    gem_purple,
+    gold_coin,
+    silver_coin,
+    carrot,
+    full_energy,
+    extra_live,
+    food,
+    flycarrot,
+};
+
+/// Maps an EventId to a PickupType if the event is a collectible item.
+/// Returns null for enemies, springs, crates, and other non-collectible events.
+pub fn event_pickup_type(id: EventId) ?PickupType {
+    return switch (id) {
+        .RedGemPlus1 => .gem_red,
+        .GreenGemPlus1 => .gem_green,
+        .BlueGemPlus1 => .gem_blue,
+        .PurpleGemPlus1 => .gem_purple,
+        .GoldCoin => .gold_coin,
+        .SilverCoin => .silver_coin,
+        .CarrotEnergyPlus1 => .carrot,
+        .FullEnergy => .full_energy,
+        .ExtraLive => .extra_live,
+        .Flycarrot => .flycarrot,
+        .Apple, .Banana, .Cherry, .Orange, .Pear, .Pretzel, .Strawberry,
+        .Lemon, .Lime, .Watermelon, .Peach, .Grapes, .Lettuce, .Eggplant,
+        .Cucumb, .SoftDrink, .SodaPop, .Milk, .Pie, .Cake, .Donut, .Cupcake,
+        .Chips, .Candy, .Chocbar, .Icecream, .Burger, .Pizza, .Fries,
+        .ChickenLeg, .Sandwich, .Taco, .Weenie, .Ham, .Cheese,
+        => .food,
+        else => null,
+    };
+}
+
 /// Returns `true` for events whose animation plays continuously (e.g. coins, gems, food).
 /// Returns `false` for events that should remain static until triggered (e.g. springs, checkpoints, crates).
 pub fn event_always_animates(id: EventId) bool {

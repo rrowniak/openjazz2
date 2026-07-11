@@ -43,6 +43,10 @@ pub const Game = struct {
     prev_tick: u32,
     gctx: context.GameContext,
     sound_mgr: sound.SoundManager,
+    score: i32,
+    gems: [4]u8,
+    health: u8,
+    lives: u8,
 
     pub fn init(alloc: std.mem.Allocator, j2l_path: []const u8) !Game {
         const scr_w: i32 = 1400;
@@ -96,6 +100,10 @@ pub const Game = struct {
             .prev_tick = @intCast(gfx.sdl.SDL_GetTicks()),
             .fps_counter = .init(),
             .sound_mgr = undefined,
+            .score = 0,
+            .gems = .{ 0, 0, 0, 0 },
+            .health = 100,
+            .lives = 3,
             .collision_sys = undefined,
             .gctx = .{
                 .draw_ctx = undefined,
@@ -243,6 +251,8 @@ pub const Game = struct {
                     e.update(dt, &self.collision_sys);
                 }
 
+                self.check_player_collectibles();
+
                 self.gctx.draw_ctx = .{
                     .tileset = &self.tileset,
                     .animset = &self.animset,
@@ -287,6 +297,8 @@ pub const Game = struct {
                 }
 
                 self.level_view.draw(&self.level, &self.gctx, time_elapsed, 2, 0);
+
+                self.render_hud();
             },
             else => {},
         }
@@ -294,6 +306,121 @@ pub const Game = struct {
         self.sound_mgr.update();
         self.shell.render_shell(events);
         self.fps_counter.tick(self.allocator, self.shell.font, &self.level_view.renderer, self.scr_w, self.scr_h);
+    }
+
+    fn check_player_collectibles(self: *Game) void {
+        const event_layer = &self.level.layers[3];
+        const cells = event_layer.cells orelse return;
+        const layer_w: i32 = @intCast(event_layer.width);
+        const layer_h: i32 = @intCast(event_layer.height);
+
+        const player_box = collision.player_aabb(self.player.pos_x, self.player.pos_y);
+        const tile_size: f32 = @floatFromInt(m.TileCoord.SIZE);
+
+        const t_min_x = @max(@as(i32, @intFromFloat(@floor(player_box.min_x / tile_size))), 0);
+        const t_min_y = @max(@as(i32, @intFromFloat(@floor(player_box.min_y / tile_size))), 0);
+        const t_max_x = @min(@as(i32, @intFromFloat(@floor((player_box.max_x - 0.001) / tile_size))), layer_w - 1);
+        const t_max_y = @min(@as(i32, @intFromFloat(@floor((player_box.max_y - 0.001) / tile_size))), layer_h - 1);
+
+        if (t_min_x > t_max_x or t_min_y > t_max_y) return;
+
+        var ty: i32 = t_min_y;
+        while (ty <= t_max_y) : (ty += 1) {
+            var tx: i32 = t_min_x;
+            while (tx <= t_max_x) : (tx += 1) {
+                const cell = &cells[@as(usize, @intCast(ty))][@as(usize, @intCast(tx))];
+                const event = cell.event orelse continue;
+                if (asset_maps.event_pickup_type(event.id)) |pickup| {
+                    self.apply_pickup(pickup);
+                    cell.event = null;
+                }
+            }
+        }
+    }
+
+    fn apply_pickup(self: *Game, pickup: asset_maps.PickupType) void {
+        switch (pickup) {
+            .gem_red => {
+                self.gems[0] += 1;
+                self.score += 100;
+            },
+            .gem_green => {
+                self.gems[1] += 1;
+                self.score += 200;
+            },
+            .gem_blue => {
+                self.gems[2] += 1;
+                self.score += 500;
+            },
+            .gem_purple => {
+                self.gems[3] += 1;
+                self.score += 1000;
+            },
+            .gold_coin => {
+                self.score += 100;
+            },
+            .silver_coin => {
+                self.score += 50;
+            },
+            .carrot => {
+                const healed = @min(self.health + 25, @as(u8, 100));
+                self.health = healed;
+            },
+            .full_energy => {
+                self.health = 100;
+            },
+            .extra_live => {
+                self.lives += 1;
+            },
+            .food => {
+                const healed = @min(self.health + 5, @as(u8, 100));
+                self.health = healed;
+            },
+            .flycarrot => {
+                self.score += 100;
+            },
+        }
+    }
+
+    fn render_hud(self: *Game) void {
+        const text = std.fmt.allocPrint(
+            self.allocator,
+            "Score: {d}  HP: {d}/100  Lives: {d}",
+            .{ self.score, self.health, self.lives },
+        ) catch return;
+        defer self.allocator.free(text);
+
+        const renderer = &self.level_view.renderer;
+        const saved_proj = renderer.projection;
+
+        const screen_proj = gfx.math.Mat4x4.init_ortho(
+            0.0,
+            @floatFromInt(self.scr_w),
+            @floatFromInt(self.scr_h),
+            0.0,
+            -1.0,
+            1.0,
+        );
+        renderer.projection = screen_proj;
+        renderer.shader.set_mat4(.projection, screen_proj.m);
+
+        const tex = gfx.text_sdl.renderText(
+            self.allocator,
+            self.shell.font,
+            text,
+            sdl.SDL_Color{ .r = 255, .g = 255, .b = 255, .a = 255 },
+        ) catch {
+            renderer.projection = saved_proj;
+            renderer.shader.set_mat4(.projection, saved_proj.m);
+            return;
+        };
+        defer tex.deinit();
+
+        const pos = gfx.math.Vec2.init(10.0, 10.0);
+        renderer.draw(tex, pos, gfx.math.Vec3.init(1.0, 1.0, 1.0));
+
+        renderer.projection = saved_proj;
+        renderer.shader.set_mat4(.projection, saved_proj.m);
     }
 };
 
